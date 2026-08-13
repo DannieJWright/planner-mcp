@@ -19,4 +19,9 @@ export class PlannerApiClient {
     if (!Array.isArray(result.plans)) throw new Error("Planner API returned an invalid plan list");
     return result.plans;
   }
+
+  async deletePlan(reference: string): Promise<void> {
+    const response = await this.fetcher(`${this.baseUrl}/plans/${encodeURIComponent(reference)}`, { method: "DELETE" });
+    if (!response.ok) throw new Error(`Planner API returned ${response.status}: ${await response.text()}`);
+  }
 }

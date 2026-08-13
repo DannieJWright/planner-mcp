@@ -75,6 +75,7 @@ Example local use in opencode.json/opencode.jsonc
 | `PUT` | `/plans` | Parse and add/update a Markdown plan; returns `{ "reference": "..." }` |
 | `GET` | `/plans` | List plan frontmatter metadata |
 | `GET` | `/plans/:reference` | Reconstruct canonical Markdown |
+| `DELETE` | `/plans/:reference` | Delete a plan and all associated sections |
 
 `PUT /plans` requires `Content-Type: text/markdown`. A frontmatter reference of `New` creates a UUID-backed `PLAN-...` reference. Any other reference updates that plan transactionally.
 
@@ -92,7 +93,7 @@ Set `PLANNER_API_URL` to override the default API URL. `sync-plan.sh` uploads, c
 
 ## MCP Surface
 
-The current MCP server intentionally exposes only `list_plans`, which returns saved plans and metadata. Use the shell scripts for bulk Markdown upload and download.
+The MCP server exposes `list_plans`, which returns saved plans and metadata, and `delete_plan`, which permanently deletes a plan and its associated sections. `delete_plan` is destructive and must only be invoked after an explicit user request to delete that plan. Use the shell scripts for bulk Markdown upload and download.
 
 ## Verification
 

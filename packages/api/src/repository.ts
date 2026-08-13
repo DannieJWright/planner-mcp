@@ -157,6 +157,18 @@ export class PlanRepository {
     return planSchema.parse({ ...row, tags: JSON.parse(row.tags), components });
   }
 
+  delete(reference: string): boolean {
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const result = this.database.prepare("DELETE FROM plans WHERE reference = ?").run(reference);
+      this.database.exec("COMMIT");
+      return result.changes > 0;
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   close(): void {
     this.database.close();
   }

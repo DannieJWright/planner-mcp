@@ -37,6 +37,7 @@ Scripts are located with the skill so an installed skill remains self-contained.
 4. `PlanRepository.save` stores plan metadata, components, and classified items in one SQLite transaction.
 5. The script downloads `GET /plans/:reference`; the API reconstructs canonical Markdown from database rows.
 6. MCP `list_plans` calls `GET /plans` and presents metadata to the agent.
+7. On an explicit user deletion request, MCP `delete_plan` calls `DELETE /plans/:reference`; SQLite cascades deletion to components and items.
 
 ## Environment Map
 
@@ -61,5 +62,5 @@ Scripts are located with the skill so an installed skill remains self-contained.
 |---|---|
 | Unit | Markdown parsing, classification field mapping, and canonical round-trip |
 | Integration | SQLite create/update/retrieve and Fastify route behavior |
-| MCP integration | REST client errors and MCP in-memory transport tool invocation |
+| MCP integration | REST client errors, destructive tool metadata, and MCP in-memory transport tool invocation |
 | End-to-end | Real HTTP listener plus shell upload/download/sync scripts |

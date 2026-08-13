@@ -43,4 +43,15 @@ describe("REST API", () => {
     expect((await app.inject({ method: "GET", url: "/plans/missing" })).statusCode).toBe(404);
     expect((await app.inject({ method: "PUT", url: "/plans", headers: { "content-type": "text/markdown" }, payload: "invalid" })).statusCode).toBe(400);
   });
+
+  it("deletes a plan by reference", async () => {
+    const repository = new PlanRepository(":memory:");
+    const app = createServer({ repository });
+    resources.push({ app, repository });
+    const reference = repository.save(samplePlan);
+
+    expect((await app.inject({ method: "DELETE", url: `/plans/${reference}` })).statusCode).toBe(204);
+    expect(repository.get(reference)).toBeUndefined();
+    expect((await app.inject({ method: "DELETE", url: `/plans/${reference}` })).statusCode).toBe(404);
+  });
 });

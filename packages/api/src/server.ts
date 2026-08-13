@@ -34,6 +34,11 @@ export function createServer(options: ServerOptions = {}): FastifyInstance {
     return reply.type("text/markdown; charset=utf-8").send(formatPlanMarkdown(plan));
   });
 
+  app.delete<{ Params: { reference: string } }>("/plans/:reference", async (request, reply) => {
+    if (!repository.delete(request.params.reference)) return reply.code(404).send({ error: "Plan not found" });
+    return reply.code(204).send();
+  });
+
   if (ownsRepository) app.addHook("onClose", async () => repository.close());
   return app;
 }

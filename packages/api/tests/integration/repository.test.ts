@@ -18,4 +18,16 @@ describe("PlanRepository", () => {
     repository.save({ ...samplePlan, reference, title: "Updated", components: [] });
     expect(repository.get(reference)).toMatchObject({ title: "Updated", components: [] });
   });
+
+  it("deletes a plan and cascades to its components and items", () => {
+    const repository = new PlanRepository(":memory:");
+    repositories.push(repository);
+    const reference = repository.save(samplePlan);
+
+    expect(repository.delete(reference)).toBe(true);
+    expect(repository.get(reference)).toBeUndefined();
+    expect(repository.database.prepare("SELECT COUNT(*) AS count FROM components").get()).toEqual({ count: 0 });
+    expect(repository.database.prepare("SELECT COUNT(*) AS count FROM items").get()).toEqual({ count: 0 });
+    expect(repository.delete(reference)).toBe(false);
+  });
 });
