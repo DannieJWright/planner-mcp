@@ -53,7 +53,72 @@ Before recording a decision, ask all four gates:
 
 Separate a constraint from any choice made in response to it. Requirements express stakeholder expectations; constraints arise from unavoidable external or integration realities. Acknowledging a fact is not choosing it.
 
-Never inflate a statement. Preserve hedges such as “likely,” “probably,” “for now,” and “may.” An unresolved behavior is an open decision, not a decided behavior. Do not invent alternatives, rationale, confirmations, findings, or stronger wording. Mark inferred reasoning as `inferred, unconfirmed` and ask before adopting it. Use `**Confirmed by user:** yes` only for an actual user-confirmed choice.
+## Constraint versus decision
+ 
+ - "iOS requires scrolling to realize lazy cells" → **constraint**. Nobody chose
+   it; no alternative exists.
+ - "V2 plans on the expectation that off-screen cells do not exist" → **decision**
+   derived from that constraint. The alternative, pretending off-screen rows are
+   addressable, was available and rejected.
+ 
+ Split a constraint and the decision it forces into two entries. Never merge
+ them into one, because the constraint outlives any decision built on it.
+ 
+ - "V1 must keep working; a breaking change is not permitted" → **constraint**.
+   It was imposed on the work, not selected by it.
+ - "V2 is a fresh module that does not import V1" → **decision** made to satisfy
+   that constraint.
+ 
+ ### Constraint versus requirement
+ 
+Requirements are expectations for intended behavior while constraints are
+compatability limitations. Both restrict the possible decisions that can be
+made, the main difference is where they come from.
+ 
+ - Requirements come from the user. They are defined behaviors, restrictions on behaviors, or expected conformance.
+ - Constraints come from research and integrations. Constraints can be added by the user or from research, but they are based around system integrations, framework limitations, or as side-effects from other requirements/constraints.
+ 
+Requirements should be information such as:
+ - Expected APIs
+ - component behavior
+ - Expected outcomes
+ 
+Constraints should be information such as:
+ - Platform limitations
+ - Framework quirks
+ - Restrictions caused by external factors
+ 
+### Knowledge gaps
+ 
+Knowledge gaps are for describing where there are known gaps in the current information about the component. This are meant to capture required follow up research that will effect what decisions are made. Knowledge gaps should mostly be provided by the user, but may come from the agent during `Phase 1 - User Refinement`.
+ 
+These should include information like:
+ - Is option A or option B more performant
+ - Is there a framework to perform functionality X
+ - How are teams using this today?
+ - What is our functional capacity under the current infrastructure constraints?
+ - How many teams will be affected by a change to the API contract?
+ 
+Knowledge gaps are often related to decisions, the resolution of the knowledge gaps may directly affect which options are selected. The point of knowledge gaps are to help produce the follow up action components, and may only be closed out from real data, research, experiments, or conversations.
+ 
+### Never inflate a user statement
+ 
+Record what the user said, at the strength they said it.
+ - Do not convert "we need to work out how X should behave" into a decision
+   about how X behaves. That is an **open decision**, plus a follow-up action.
+ - Do not convert "check what the other framework does" into a conclusion about
+   what ours will do.
+ - Do not invent a rejected alternative to justify promoting a statement to a
+   decision. If you cannot name one the user actually ruled out, there is no
+   decision yet.
+ - Do not attach a `Why` the user did not give. If you infer the reasoning, mark
+   it `inferred, unconfirmed` and ask.
+ - Words like *likely*, *probably*, *for now*, and *may* are hedges. Preserve
+   them verbatim. A hedged statement is an open decision with a stated leaning,
+   not a decision.
+ 
+Use `**Confirmed by user:** yes` only when the user confirmed a **choice**.
+Never attach it to a finding the user merely agreed was accurate.
 
 ## Phase 0 - Decomposition
 
