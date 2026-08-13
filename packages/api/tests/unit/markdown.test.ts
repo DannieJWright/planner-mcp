@@ -17,4 +17,16 @@ describe("plan Markdown", () => {
   it("rejects documents without the component root", () => {
     expect(() => parsePlanMarkdown("---\ntitle: Invalid\n---\n\nNo components")).toThrow("Missing # Components heading");
   });
+
+  it("preserves fenced and inline code in section content", () => {
+    const details = "Run `npm test` before upload.\n\n```markdown\n### This heading is code\n`inline in code`\n```";
+    const plan = {
+      ...samplePlan,
+      components: [{ ...samplePlan.components[0]!, requirements: [{ ref: "1.A", title: "Code example", details }] }],
+    };
+
+    const parsed = parsePlanMarkdown(formatPlanMarkdown(plan));
+    expect(parsed.components[0]?.requirements[0]?.details).toBe(details);
+    expect(formatPlanMarkdown(parsed)).toContain(details);
+  });
 });
