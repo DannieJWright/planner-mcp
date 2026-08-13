@@ -27,6 +27,10 @@ npm run build
 npm run check
 ```
 
+## Commits
+
+- Use Conventional Commits for every commit, for example `feat: add plan deletion` or `fix: preserve code blocks in plan Markdown`.
+
 ## Testing Rules
 
 - Unit tests cover parser and formatter edge behavior.
