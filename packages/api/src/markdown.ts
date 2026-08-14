@@ -1,7 +1,7 @@
 import matter from "gray-matter";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import YAML from "yaml";
-import { planSchema, type ActionItem, type Component, type KnowledgeGap, type Plan, type StatusItem, type TextItem } from "./domain.js";
+import { decisionStatuses, knowledgeGapStatuses, planSchema, type ActionItem, type Component, type KnowledgeGap, type Plan, type StatusItem, type TextItem } from "./domain.js";
 
 type Node = {
   type: string;
@@ -46,7 +46,7 @@ function contentBetween(markdown: string, nodes: Node[], start: number, headingD
   return markdown.slice(startOffset, endOffset).trim();
 }
 
-function parseItems(markdown: string, nodes: Node[], start: number, end: number, statusRequired: boolean, depth = 4): Array<TextItem | StatusItem> {
+function parseItems(markdown: string, nodes: Node[], start: number, end: number, statusRequired: boolean, depth = 4, allowedStatuses: readonly string[] = ["Open", "Decided", "Resolved", "Closed"]): Array<TextItem | StatusItem> {
   const items: Array<TextItem | StatusItem> = [];
   for (let index = start; index < end; index += 1) {
     const node = nodes[index]!;
@@ -60,17 +60,15 @@ function parseItems(markdown: string, nodes: Node[], start: number, end: number,
     const title = match[2]?.trim() || heading;
     let details = contentBetween(markdown, nodes, index + 1, depth);
     if (statusRequired) {
-      const statusMatch = details.match(/^(?:\*\*)?Status:(?:\*\*)?\s*(Open|Decided|Resolved|Closed)\s*(?:\n\n|\n)?/i);
-      if (!statusMatch) {
-        const suppliedStatus = details.match(/^(?:\*\*)?Status:(?:\*\*)?\s*([^\n]*)/i)?.[1]?.trim();
-        const problem = suppliedStatus
-          ? `invalid status \`${suppliedStatus}\``
-          : "missing required status";
-        throw new Error(`Plan Markdown error${lineLocation(node)}: ${heading} has ${problem}. Add \`**Status:** Open\` immediately below the heading; allowed values are Open, Decided, Resolved, and Closed.`);
+      const statusMatch = details.match(/^(?:\*\*)?Status:(?:\*\*)?\s*([^\n]+)\s*(?:\n\n|\n)?/i);
+      const suppliedStatus = statusMatch?.[1]?.trim();
+      const normalizedStatus = allowedStatuses.find((status) => status.toLowerCase() === suppliedStatus?.toLowerCase());
+      if (!statusMatch || !normalizedStatus) {
+        const problem = suppliedStatus ? `invalid status \`${suppliedStatus}\`` : "missing required status";
+        throw new Error(`Plan Markdown error${lineLocation(node)}: ${heading} has ${problem}. Add \`**Status:** ${allowedStatuses[0]}\` immediately below the heading; allowed values are ${allowedStatuses.join(", ")}.`);
       }
       details = details.slice(statusMatch[0].length).trim();
-      const normalized = statusMatch[1]![0]!.toUpperCase() + statusMatch[1]!.slice(1).toLowerCase();
-      items.push({ ref, title, status: normalized as StatusItem["status"], details });
+      items.push({ ref, title, status: normalizedStatus as StatusItem["status"], details });
     } else {
       items.push({ ref, title, details });
     }
@@ -97,10 +95,13 @@ function parseKnowledgeGaps(markdown: string, nodes: Node[], start: number, end:
     if (findingsHeadings.length > 1) throw new Error(`Plan Markdown error${lineLocation(nodes[findingsHeadings[1]!]!)}: ${nodeText(nodes[gapStart]!)} contains more than one \`##### Findings\` subsection.`);
     const nestedFinding = nodes.find((node, index) => index > findingsHeading && index < gapEnd && node.type === "heading" && /^Finding\s+/i.test(nodeText(node).trim()));
     if (nestedFinding) throw new Error(`Plan Markdown error${lineLocation(nestedFinding)}: Findings must be direct content under \`##### Findings\`; remove the separate \`${nodeText(nestedFinding).trim()}\` heading.`);
-    const gap = (parseItems(markdown, nodes.slice(0, findingsHeading), gapStart, findingsHeading, true) as StatusItem[])[0]!;
+    const gap = (parseItems(markdown, nodes.slice(0, findingsHeading), gapStart, findingsHeading, true, 4, knowledgeGapStatuses) as StatusItem[])[0]!;
+    const findings = contentBetween(markdown, nodes, findingsHeading + 1, 5);
+    if (gap.status === "Resolved" && !findings) throw new Error(`Plan Markdown error${lineLocation(nodes[gapStart]!)}: ${nodeText(nodes[gapStart]!)} cannot be \`Resolved\` with empty Findings.`);
     return {
       ...gap,
-      findings: contentBetween(markdown, nodes, findingsHeading + 1, 5),
+      status: gap.status as KnowledgeGap["status"],
+      findings,
     };
   });
 }
@@ -144,7 +145,7 @@ function parseComponent(markdown: string, nodes: Node[], start: number, end: num
     description,
     requirements: parseItems(markdown, nodes, requirementsStart, requirementsEnd, false) as TextItem[],
     constraints: parseItems(markdown, nodes, constraintsStart, constraintsEnd, false) as TextItem[],
-    decisions: parseItems(markdown, nodes, decisionsStart, decisionsEnd, true) as StatusItem[],
+    decisions: parseItems(markdown, nodes, decisionsStart, decisionsEnd, true, 4, decisionStatuses) as Component["decisions"],
     knowledgeGaps: parseKnowledgeGaps(markdown, nodes, gapsStart, gapsEnd),
     notes: parseItems(markdown, nodes, notesStart, notesEnd, false) as TextItem[],
     questions: questions.map((question) => ({ ...question, details: question.details.replace(/^>\s?/, "") })),

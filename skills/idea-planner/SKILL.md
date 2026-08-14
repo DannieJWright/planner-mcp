@@ -34,118 +34,243 @@ Derive `<human-readable-topic-summary>` from a short summary of the topic title 
 
 ## Classify Before Recording
 
-Classify every statement before choosing a section:
+Classify every statement before choosing a section. Each kind has one positive test and explicit exclusions:
 
-| Kind | Test | Section |
-|---|---|---|
-| Requirement | Stakeholder-set behavior or outcome the solution must satisfy | `Requirements` |
-| Constraint | Unavoidable platform, integration, physical, compatibility, or imposed limitation | `Constraints` |
-| Decision | A choice among viable alternatives, whether still open or already selected | `Decisions` |
-| Knowledge gap | Topic information the user lacks and must obtain through research, experiment, data, or external conversation | `Knowledge Gaps` |
-| Note | Context that informs judgment but neither obliges nor chooses | `Notes` |
-| Open question | A question the agent asks the user to clarify intent, ambiguity, contradiction, or component scope | `Open Questions` |
+| Kind | Record it when | Do not use it for | Section |
+|---|---|---|---|
+| Requirement | A stakeholder establishes behavior, an outcome, or conformance the solution must satisfy | External limitations, implementation choices, background facts, or evidence | `Requirements` |
+| Constraint | A platform, integration, process, compatibility obligation, physical reality, or other imposed condition limits the available solution space | Desired behavior or a chosen response to the limitation | `Constraints` |
+| Decision | The topic contains a choice among viable alternatives, whether the choice is unresolved or selected | Facts with no alternative, missing evidence, or clarification needed from the user | `Decisions` |
+| Knowledge Gap | The user lacks topic information that requires research, an experiment, data, or an external conversation to obtain | A question the agent can resolve by asking the user what they mean | `Knowledge Gaps` |
+| Finding | Information has been obtained that directly answers or reduces one specific Knowledge Gap | Requirements, generic context, assumptions, or unsupported assertions | The associated knowledge gap's `##### Findings` body |
+| Note | User-provided context, caution, observation, reminder, or assumption informs judgment without obliging, limiting, choosing, or reporting new evidence | Required behavior, external limitations, choices, or research results | `Notes` |
+| Open Question | The agent needs the user to clarify intent, ambiguity, contradiction, terminology, or component scope | Topic information requiring research or evidence | `Open Questions` |
+| Action Item | The user explicitly supplies follow-up work to be performed by one or more users | Work inferred by the agent from a gap, question, requirement, or decision | `# Action Items` |
 
-Before recording a decision, ask these gates:
+Component descriptions summarize the component's scope. They do not store classified facts and must not duplicate item details.
 
-1. Could the opposite reasonably have been chosen? If not, record a constraint or note.
-2. Is there a choice to make among viable alternatives? If not, do not call it a decision.
-3. If the user selected an alternative, mark the decision `Decided`; otherwise preserve the unresolved choice as `Open`.
-4. Did the user describe a choice, rather than merely acknowledge a fact?
+### Classification decision tree
 
-Separate a constraint from any choice made in response to it. Requirements express stakeholder expectations; constraints arise from unavoidable external or integration realities. Acknowledging a fact is not choosing it.
+Apply these tests in order to each distinct proposition. Stop at the first matching terminal classification:
 
-## Constraint versus decision
- 
- - "iOS requires scrolling to realize lazy cells" → **constraint**. Nobody chose
-   it; no alternative exists.
- - "V2 plans on the expectation that off-screen cells do not exist" → **decision**
-   derived from that constraint. The alternative, pretending off-screen rows are
-   addressable, was available and rejected.
- 
- Split a constraint and the decision it forces into two entries. Never merge
- them into one, because the constraint outlives any decision built on it.
- 
- - "V1 must keep working; a breaking change is not permitted" → **constraint**.
-   It was imposed on the work, not selected by it.
- - "V2 is a fresh module that does not import V1" → **decision** made to satisfy
-   that constraint.
- 
- ### Constraint versus requirement
- 
-Requirements are expectations for intended behavior while constraints are
-compatability limitations. Both restrict the possible decisions that can be
-made, the main difference is where they come from.
- 
- - Requirements come from the user. They are defined behaviors, restrictions on behaviors, or expected conformance.
- - Constraints come from research and integrations. Constraints can be added by the user or from research, but they are based around system integrations, framework limitations, or as side-effects from other requirements/constraints.
- 
-Requirements should be information such as:
- - Expected APIs
- - component behavior
- - Expected outcomes
- 
-Constraints should be information such as:
- - Platform limitations
- - Framework quirks
- - Restrictions caused by external factors
- 
-### Knowledge gaps
- 
-Knowledge gaps are for describing where there are known gaps in the current information about the component. This are meant to capture required follow up research that will effect what decisions are made. Knowledge gaps should mostly be provided by the user, but may come from the agent during `Phase 1 - User Refinement`.
- 
-These should include information like:
- - Is option A or option B more performant
- - Is there a framework to perform functionality X
- - How are teams using this today?
- - What is our functional capacity under the current infrastructure constraints?
- - How many teams will be affected by a change to the API contract?
- 
-Knowledge gaps are often related to decisions, the resolution of the knowledge gaps may directly affect which options are selected. The point of knowledge gaps are to help produce the follow up action components, and may only be closed out from real data, research, experiments, or conversations.
+1. Is this explicitly supplied follow-up work with an actor or expected completion? Record an **Action Item**. Never infer one.
+2. Is this newly obtained information that answers one identified Knowledge Gap? Record it only as that gap's **Finding**.
+3. Is the agent asking the user what the request means, which scope is intended, or how to reconcile wording? Record an **Open Question**.
+4. Does the user lack topic information that can only be obtained through research, experiment, data, or an external conversation? Record a **Knowledge Gap**.
+5. Does the statement describe a choice among viable alternatives?
+   - If no option is selected, record an **Decision** that is "Open".
+   - If an option is selected, record a **Decision** that is "Decided".
+   - If the choice is intentionally abandoned, record a **Decision** that is "Closed".
+6. Does an external or imposed condition limit what can be done, independent of the solution selected? Record a **Constraint**.
+7. Does a stakeholder require behavior, an outcome, conformance, or a prohibition? Record a **Requirement**.
+8. Does the statement provide relevant context without satisfying another test? Record a **Note**.
+9. Is there an ambiguity, contradictions, or vague statement? Then as an Open Question for clarification.
+10. If no test matches, ask the user directly.
 
-### Knowledge gaps versus open questions
+When one sentence contains multiple propositions that reach different terminals, split them into separate entries. Never choose a section from keywords alone; use the proposition's role.
 
-Classify based on who lacks the information and how it can be resolved:
+### Required classification rationale
 
-- A **Knowledge Gap** records topic information the user does not have. Resolving it requires research, an experiment, data, or an external conversation.
-- An **Open Question** records clarification the agent needs from the user to understand the request, resolve ambiguity or contradiction, or define component scope.
-- Never copy an agent clarification question into `Knowledge Gaps`. An unanswered Open Question remains only an Open Question.
-- Do not create a Knowledge Gap merely because the agent is unsure how to interpret or implement the user's request.
-- When the user answers an Open Question, remove that question and fold the answer into the appropriate requirement, constraint, decision, note, or other section. The resulting entry must stand alone without the original question and answer.
+Whenever Phase 0 or Phase 1 reports a classification, provide enough decision information for another agent to audit the selection. For every recorded or changed entry, report:
 
-Examples:
+- The source statement or a faithful short quote.
+- The selected `kind -> section`.
+- The decisive classification test that matched.
+- The closest plausible competing kind and why it did not match.
+- Any status selected and the evidence supporting that status.
+- Any split into separate propositions.
+- Any preserved hedge, uncertainty, or user-supplied rationale.
 
-- "We do not know whether the external service supports bulk export; check its documentation" → **Knowledge Gap**.
-- "When you say bulk export, do you require one archive or separate files?" → **Open Question**.
-- The second example must not also appear as a Knowledge Gap.
- 
+Do not report only `kind -> section`. Example:
+
+```text
+"We still need to pick a YAML parser" -> Decision -> Decisions
+Reason: it names an unresolved choice among viable parser alternatives.
+Status: Open because no parser was selected.
+Not a Knowledge Gap: the missing information is which option the user will choose, not evidence that must be researched.
+```
+
+### Major classification boundaries
+
+#### Requirement versus constraint
+
+A Requirement states what stakeholders expect the solution to do. A Constraint states what the solution space cannot avoid because of an imposed reality. The user may communicate either; authorship alone does not determine the kind.
+
+- Correct Requirement: "The export must include all active accounts." This defines required behavior.
+- Correct Constraint: "The provider limits exports to 10,000 rows." This externally limits implementations.
+- Incorrect: recording the provider's row limit as a Requirement merely because the user mentioned it.
+
+#### Requirement versus decision
+
+A Requirement defines the outcome that must hold. A Decision selects, or leaves open the selection of, a means or policy among alternatives. A decision can satisfy a requirement without replacing it.
+
+- Requirement: "Users must receive an export within five minutes."
+- Decision: "Figure out if we should use asynchronous exports rather than synchronous requests."
+- Incorrect: duplicating "exports finish within five minutes" as both the Requirement and Decision.
+
+#### Constraint versus decision
+
+A Constraint exists regardless of which solution is selected. A Decision is a selectable response to that constraint. Record both when both propositions are present.
+
+- Constraint: "iOS does not realize off-screen lazy cells until scrolling occurs."
+- Decision: "The exact scrolling solution needs to account for the fact unrealized off-screen cells are unavailable. The possible options are..."
+- Incorrect: merging the platform limitation and the chosen handling policy into one entry.
+
+#### Decision versus open question
+
+An Open Decision belongs to the user's topic: an alternative still needs selection. An Open Question belongs to the agent's clarification process: the agent needs the user to explain the request.
+
+- Open Decision: "Pick the YAML parser library." The choice exists but is unresolved.
+- Open Question: "Which YAML formats must the parser support?" The agent needs scope clarification.
+- Incorrect: converting every unresolved agent question into an Open Decision.
+
+#### Decision versus knowledge gap
+
+A Decision asks which alternative will be selected. A Knowledge Gap asks for missing evidence that may inform that selection. Keep both when research informs a separate choice.
+
+- Open Decision: "Choose polling or webhooks."
+- Knowledge Gap: "The user does not know the provider's webhook delivery limits."
+- Incorrect: recording "Which approach do you want?" as a Knowledge Gap; that is an Open Question to the user.
+
+#### Knowledge gap versus open question
+
+Classify by who lacks the information and how it can be resolved:
+
+- Knowledge Gap: the **user** lacks topic information; resolution requires research, experiment, data, or an external conversation.
+- Open Question: the **agent** lacks request clarity; resolution requires an answer from the user.
+- Correct Knowledge Gap: "We do not know whether the external service supports bulk export; check its documentation."
+- Correct Open Question: "When you say bulk export, do you require one archive or separate files?"
+- Incorrect: copying the agent's bulk-export clarification into both sections.
+
+An unanswered Open Question remains only an Open Question. Never create or convert it into a Knowledge Gap merely because it remains unanswered.
+
+#### Knowledge gap versus finding
+
+A Knowledge Gap states what topic information is missing. Its Findings body records only information later obtained that addresses that gap.
+
+- Knowledge Gap: "The supported peak request rate is unknown."
+- Finding: "Load testing measured 400 requests per second."
+- Incorrect: restating "the peak request rate is unknown" in Findings.
+
+#### Finding versus requirement
+
+A Finding is evidence about the world; a Requirement is an expectation the solution must satisfy. Evidence may confirm, challenge, or motivate a Requirement, but must not repeat it.
+
+- Requirement: "The service must support 300 requests per second."
+- Finding: "Load testing measured a maximum of 400 requests per second."
+- Incorrect Finding: "The service must support 300 requests per second."
+
+#### Finding versus note
+
+A Finding directly resolves or reduces a named Knowledge Gap and records obtained evidence. A Note preserves context that did not result from resolving that gap.
+
+- Finding: "The provider documentation confirms a 10,000-row limit."
+- Note: "Finance currently reviews exports monthly."
+- Incorrect: recording the monthly review schedule as a Finding when no Knowledge Gap asked about it.
+
+#### Note versus component description
+
+A component description summarizes scope in 1-10 sentences. A Note preserves a distinct contextual fact within that scope.
+
+- Description: "Define how analytics data is exported and reviewed."
+- Note: "Finance currently reviews exports monthly."
+- Incorrect: copying the monthly review fact into both locations.
+
+#### Knowledge gap versus action item
+
+A Knowledge Gap describes missing information. An Action Item describes explicitly supplied work that may obtain it. Neither substitutes for the other.
+
+- Knowledge Gap: "The provider's sustained rate limit is unknown."
+- Action Item: "Run a sustained-load test and document the rate limit."
+- Incorrect: inventing that Action Item solely because the Knowledge Gap exists.
+
+### Status and lifecycle rules
+
+Decisions use the model statuses:
+
+- `Open`: a choice among viable alternatives exists, but no alternative has been selected.
+- `Decided`: the user selected an alternative. Preserve the selected option and any user-supplied rationale.
+- `Closed`: the choice was intentionally abandoned or is no longer relevant. Do not use `Resolved`; it is not a Decision status.
+
+Knowledge Gaps use the model statuses:
+
+- `Open`: required topic information is still missing. Its `##### Findings` body may be empty or contain partial information.
+- `Resolved`: Findings contain sufficient information to answer the gap. A non-empty Findings body is required.
+- `Closed`: the gap was abandoned as irrelevant or no longer needed. Resolution evidence is not required.
+
+Open Questions have no status field. Keep unanswered questions. After the user answers one, remove it and incorporate the answer into correctly classified standalone entries with enough context to be understood without the question-and-answer exchange.
+
+Action Items use: 
+  - `TODO`: The action item has not been started yet.
+  - `In Progress`: The action item has been assigned and is being actively worked on.
+  - `Done`: The action item has been completed, the acceptance criteria satisfied, and follow ups are resolved.
+  - `Closed`: The action item was abandoned as irrelevant or no longer needed. Resolution evidence is not required.
+
+Completing an Action Item associated with a Knowledge Gap must add its result to that gap's Findings and mark the gap `Resolved` when the result sufficiently answers it. `Done` alone is not evidence: record the resulting information in Findings.
+
+### Findings structure and provenance
+
+Each Knowledge Gap has exactly one `##### Findings` heading and one direct Markdown body. Do not create separately headed Finding items. The body may contain multiple paragraphs or bullets, but it remains one section.
+
+If Action Items produced the Findings, cite every producing `ACTION-*` reference in the direct Findings body. Findings may cite multiple Action Items or none when no Action Item was needed. Do not invent provenance.
+
+Correct:
+
+```markdown
+#### Knowledge Gap 1.A
+
+**Status:** Resolved
+
+The provider's sustained rate limit is unknown.
+
+##### Findings
+
+- `ACTION-2` measured a sustained limit of 400 requests per second. 
+- `ACTION-3` confirmed the same limit in the provider documentation.
+```
+
+Invalid structures include component-level `### Findings`, peer `#### Findings`, and separate `###### Finding 1.A` items.
+
+### Action Item relationships
+
+Trigger Sources may reference a component (`COMP-1`) or a component item (`Requirement 1.A`, `Constraint 1.A`, `Decision 1.A`, `Knowledge Gap 1.A`, `Note 1.A`, or `Question 1.A`). Each source must resolve within the same plan. List every directly affected source by canonical reference and short description; multiple sources are allowed.
+
+Action Items retain their context, acceptance criteria, trigger sources, assignees, and status. Do not infer an Action Item, assignee, acceptance criterion, or trigger source.
+
+### No duplication
+
+Store each proposition once according to its role. Related entries may reference one another, but must contribute different information. In particular:
+
+- Do not copy a Requirement into Findings; Findings contain only newly obtained evidence.
+- Do not copy an Open Question into Knowledge Gaps.
+- Do not copy a Note into the component description.
+- Do not copy a Constraint into a Decision; record the selectable response separately.
+- Do not restate a Knowledge Gap in its Findings body.
+
+When two candidate entries express the same proposition, keep the correctly classified entry and remove the duplicate. When they express different roles, retain both and make the relationship explicit.
+
 ### Never inflate a user statement
- 
-Record what the user said, at the strength they said it.
- - Do not convert "we need to work out how X should behave" into a decided
-   outcome. Record the unresolved choice as an **open decision**.
- - Do not convert "check what the other framework does" into a conclusion about
-   what ours will do.
- - Do not invent a selected or rejected alternative. An unresolved choice may
-   be an open decision, but its details must not claim that an option was chosen.
- - Do not attach a `Why` the user did not give. If you infer the reasoning, mark
-   it `inferred, unconfirmed` and ask.
- - Words like *likely*, *probably*, *for now*, and *may* are hedges. Preserve
-   them verbatim. A hedged choice is an open decision with a stated leaning,
-   not a decided outcome.
- 
-Never treat a fact the user merely agreed was accurate as a post-research knowledge-gap finding.
+
+Record what the user said at the strength they said it.
+
+- Do not convert "we need to work out how X should behave" into a decided outcome. Record the unresolved choice as an Open Decision.
+- Do not convert "check what the other framework does" into a conclusion about what this solution will do.
+- Do not invent a selected or rejected alternative. An unresolved choice may be an Open Decision, but its details must not claim that an option was chosen.
+- Do not attach rationale the user did not give. If reasoning is inferred, label it `inferred, unconfirmed` and ask an Open Question.
+- Preserve words such as *likely*, *probably*, *for now*, and *may*. A hedged choice is an Open Decision with a stated leaning, not a decided outcome.
+- Never treat a fact the user merely agreed was accurate as post-research Findings.
 
 ## Phase 0 - Decomposition
 
 1. Use only the brain dump supplied in the conversation.
 2. Extract concrete concepts that need independent clarification. Keep user-declared concepts separate even if related.
 3. Propose a numbered component list with 3-7 word descriptions and ask the user to confirm it.
-4. After confirmation, classify the supplied statements into requirements, constraints, decisions, knowledge gaps, and notes.
-5. Give every knowledge gap an empty `Findings` subsection unless the user already supplied post-research information for that gap. Stub `Open Questions` if the user supplied none. Never duplicate an Open Question as a Knowledge Gap. Do not invent content merely to fill a section.
+4. After confirmation, run every supplied proposition through the classification decision tree. Classify requirements, constraints, decisions, knowledge gaps, findings, notes, open questions, and explicitly supplied action items.
+5. Give every Knowledge Gap one empty `##### Findings` subsection unless the user already supplied information obtained after investigating that gap. Never invent Findings or duplicate an Open Question as a Knowledge Gap. Stub `Open Questions` if the agent has no clarification questions.
 6. Write (`PLAN_FILE`) using the exact output format below.
 7. Keep each distinct topic in its own requirement, constraint, or decision subsection. Never combine multiple topics in one item.
 8. Preserve explicit user examples under the item they illustrate, including both `Good` and `Bad` examples when supplied.
-9. Report every recorded entry as `kind -> section`. Quote the user's own words for decisions. Separately report downgraded or omitted statements.
+9. Produce the Required Classification Rationale for every recorded entry. Quote the user's own words for Decisions. Separately report downgraded or omitted statements and explain which classification test they failed.
 10. Stop. State that Phase 0 is complete and wait for explicit permission to enter Phase 1.
 
 ## Phase 1 - User Refinement
@@ -153,12 +278,12 @@ Never treat a fact the user merely agreed was accurate as a post-research knowle
 Enter only when the user expressly asks to proceed.
 
 1. Re-read (`PLAN_FILE`), because the user may have changed it. This is explicit permission to read that plan file only, not the workspace or its references.
-2. Critically assess each component for unclear scope, ambiguous wording, contradictions, and knowledge gaps.
+2. Critically assess each component for unclear scope, ambiguous wording, contradictions, user-owned Knowledge Gaps, duplicate propositions, and misclassified entries. Use Open Questions, not Knowledge Gaps, for clarification the agent needs from the user.
 3. Add focused questions to that component's `Open Questions`. Every question must cite its trigger, such as exact wording, a contradiction, knowledge-gap finding, or note. Enclose quoted user phrasing in quotation marks inside the block quote.
 4. Do not offer alternatives, recommend solutions, make choices, or lead the user toward a decision. Phase 1 refines known information only.
-5. Incorporate answers naturally into the correctly classified sections. Behavioral clarifications become requirements; external process or tooling restrictions become constraints; unresolved choices become open decisions; and statements to keep something in mind become notes. Preserve explicit examples under the affected item. Remove answered questions after incorporating their answers; retain only unanswered questions.
+5. Run each answer through the classification decision tree and incorporate every distinct proposition into the correct section. Behavioral expectations become Requirements; imposed external limitations become Constraints; unresolved choices become Open Decisions; selected choices become Decided Decisions; user-owned missing topic information becomes Knowledge Gaps; obtained gap information becomes Findings; and contextual reminders become Notes. Preserve explicit examples under the affected item. Remove answered questions after incorporating their answers; retain only unanswered questions.
 6. If answers create new ambiguity, add focused follow-up questions and report them.
-7. For every answer folded in, report `kind -> section`, quote decisions, and list downgrades and omissions.
+7. Produce the Required Classification Rationale for every added, updated, moved, split, or removed entry. Quote Decisions and list downgrades and omissions with the failed classification test.
 8. Do not proceed until all agent clarification questions are resolved and every component is well-defined.
 9. Stop and wait for the user's explicit statement that they finished filling out the document and want Phase 2.
 
@@ -243,7 +368,7 @@ status: Draft
 # Action Items
 ```
 
-Use the component number in every component-item reference (`2.A`, `3.A`, and so on). Always emit `# Action Items`, but do not fill or infer action items. Action items are follow-up work performed by users and may only be included when explicitly supplied. Valid plan statuses are `Draft`, `In Progress`, `Done`, and `Closed`.
+Use the component number in every component-item reference (`2.A`, `3.A`, and so on). Always emit `# Action Items`, but do not fill or infer action items. Action items are follow-up work performed by users and may only be included when explicitly supplied. Valid plan statuses are `Draft`, `In Progress`, `Done`, and `Closed`. Valid Decision statuses are `Open`, `Decided`, and `Closed`; valid Knowledge Gap statuses are `Open`, `Resolved`, and `Closed`.
 
 When an action item is explicitly supplied, use this structure:
 
@@ -270,7 +395,7 @@ When an action item is explicitly supplied, use this structure:
 - <person>
 ```
 
-List every affected triggering item by reference and short description. Use bullets for trigger sources and assignees.
+List every affected triggering component or component item by canonical reference and short description. Every Trigger Source must resolve within the same plan. Multiple Trigger Sources are allowed. Use bullets for trigger sources and assignees.
 
 ## Common Mistakes
 

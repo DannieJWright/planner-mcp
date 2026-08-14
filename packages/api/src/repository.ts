@@ -209,9 +209,9 @@ export class PlanRepository {
         if (!field) throw new Error(`Unknown item kind in database: ${item.kind}`);
         if (field === "knowledgeGaps") {
           const findings = (this.database.prepare("SELECT details FROM knowledge_gap_findings WHERE knowledge_gap_id = ? ORDER BY position").all(item.id) as unknown as Array<{ details: string }>).map(({ details }) => details).join("\n\n");
-          component.knowledgeGaps.push({ ref: item.ref, title: item.title, details: item.details, status: item.status!, findings });
+          component.knowledgeGaps.push({ ref: item.ref, title: item.title, details: item.details, status: item.status! as Component["knowledgeGaps"][number]["status"], findings });
         } else if (field === "decisions") {
-          component[field].push({ ref: item.ref, title: item.title, details: item.details, status: item.status! });
+          component[field].push({ ref: item.ref, title: item.title, details: item.details, status: item.status! as Component["decisions"][number]["status"] });
         } else {
           component[field].push({ ref: item.ref, title: item.title, details: item.details });
         }

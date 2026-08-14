@@ -13,12 +13,33 @@ describe("plan Markdown", () => {
 
   it("rejects decisions without a status", () => {
     const markdown = formatPlanMarkdown(samplePlan).replace("**Status:** Open\n\nChoose batch", "Choose batch");
-    expect(() => parsePlanMarkdown(markdown)).toThrow("Decision 1.A has missing required status. Add `**Status:** Open` immediately below the heading; allowed values are Open, Decided, Resolved, and Closed.");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("Decision 1.A has missing required status. Add `**Status:** Open` immediately below the heading; allowed values are Open, Decided, Closed.");
   });
 
   it("reports invalid statuses with the item and accepted values", () => {
     const markdown = formatPlanMarkdown(samplePlan).replace("**Status:** Open", "**Status:** Answered");
     expect(() => parsePlanMarkdown(markdown)).toThrow("Decision 1.A has invalid status `Answered`");
+  });
+
+  it("rejects knowledge-gap statuses on decisions", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace("**Status:** Open\n\nChoose batch", "**Status:** Resolved\n\nChoose batch");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("Decision 1.A has invalid status `Resolved`");
+  });
+
+  it("rejects decision statuses on knowledge gaps", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace("**Status:** Open\n\nMeasure peak", "**Status:** Decided\n\nMeasure peak");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("Knowledge Gap 1.A has invalid status `Decided`");
+  });
+
+  it("rejects resolved knowledge gaps with empty findings", () => {
+    const plan = {
+      ...samplePlan,
+      components: [{
+        ...samplePlan.components[0]!,
+        knowledgeGaps: [{ ...samplePlan.components[0]!.knowledgeGaps[0]!, status: "Resolved" as const, findings: "" }],
+      }],
+    };
+    expect(() => formatPlanMarkdown(plan)).toThrow("Resolved knowledge gaps must contain findings");
   });
 
   it("rejects documents without the component root", () => {
@@ -58,6 +79,17 @@ describe("plan Markdown", () => {
   it("rejects duplicate action-items roots", () => {
     const markdown = `${formatPlanMarkdown(samplePlan)}\n# Action Items\n`;
     expect(() => parsePlanMarkdown(markdown)).toThrow("document contains more than one `# Action Items` heading");
+  });
+
+  it("rejects action-item trigger sources outside the plan", () => {
+    const plan = {
+      ...samplePlan,
+      actionItems: [{
+        ...samplePlan.actionItems[0]!,
+        triggerSources: [{ ref: "Knowledge Gap 9.Z", title: "Missing gap" }],
+      }],
+    };
+    expect(() => formatPlanMarkdown(plan)).toThrow("Trigger Source Knowledge Gap 9.Z does not resolve to a component or component item in this plan");
   });
 
   it("identifies missing frontmatter fields", () => {
