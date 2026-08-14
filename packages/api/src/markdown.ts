@@ -1,7 +1,7 @@
 import matter from "gray-matter";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import YAML from "yaml";
-import { planSchema, type Component, type Plan, type StatusItem, type TextItem } from "./domain.js";
+import { planSchema, type ActionItem, type Component, type KnowledgeGap, type Plan, type StatusItem, type TextItem } from "./domain.js";
 
 type Node = {
   type: string;
@@ -19,7 +19,6 @@ const sections = [
   "Constraints",
   "Decisions",
   "Knowledge Gaps",
-  "Findings",
   "Notes",
   "Open Questions",
 ] as const;
@@ -47,19 +46,19 @@ function contentBetween(markdown: string, nodes: Node[], start: number, headingD
   return markdown.slice(startOffset, endOffset).trim();
 }
 
-function parseItems(markdown: string, nodes: Node[], start: number, end: number, statusRequired: boolean): Array<TextItem | StatusItem> {
+function parseItems(markdown: string, nodes: Node[], start: number, end: number, statusRequired: boolean, depth = 4): Array<TextItem | StatusItem> {
   const items: Array<TextItem | StatusItem> = [];
   for (let index = start; index < end; index += 1) {
     const node = nodes[index]!;
-    if (node.type !== "heading" || node.depth !== 4) continue;
+    if (node.type !== "heading" || node.depth !== depth) continue;
     const heading = nodeText(node).trim();
-    const match = heading.match(/^(?:Requirement|Constraint|Decision|Knowledge Gap|Finding|Note|Question)\s+([\w.-]+)(?:\s*[-:]\s*(.*))?$/i);
+    const match = heading.match(/^(?:Requirement|Constraint|Decision|Knowledge Gap|Finding|Note|Question|Acceptance Criteria)\s+([\w.-]+)(?:\s*[-:]\s*(.*))?$/i);
     if (!match) {
       throw new Error(`Plan Markdown error${lineLocation(node)}: invalid item heading \`${heading}\`. Expected \`#### <Item Type> <reference> - <title>\`, for example \`#### Requirement 1.A - Upload plans\`.`);
     }
     const ref = match[1]!;
     const title = match[2]?.trim() || heading;
-    let details = contentBetween(markdown, nodes, index + 1, 4);
+    let details = contentBetween(markdown, nodes, index + 1, depth);
     if (statusRequired) {
       const statusMatch = details.match(/^(?:\*\*)?Status:(?:\*\*)?\s*(Open|Decided|Resolved|Closed)\s*(?:\n\n|\n)?/i);
       if (!statusMatch) {
@@ -77,6 +76,26 @@ function parseItems(markdown: string, nodes: Node[], start: number, end: number,
     }
   }
   return items;
+}
+
+function parseKnowledgeGaps(markdown: string, nodes: Node[], start: number, end: number): KnowledgeGap[] {
+  const gapStarts = nodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node, index }) => index >= start && index < end && node.type === "heading" && node.depth === 4 && /^Knowledge Gap\s+/i.test(nodeText(node)))
+    .map(({ index }) => index);
+
+  return gapStarts.map((gapStart, gapIndex) => {
+    const gapEnd = gapStarts[gapIndex + 1] ?? end;
+    const findingsHeading = nodes.findIndex((node, index) => index > gapStart && index < gapEnd && node.type === "heading" && node.depth === 4 && nodeText(node).trim() === "Findings");
+    if (findingsHeading < 0) {
+      throw new Error(`Plan Markdown error${lineLocation(nodes[gapStart]!)}: ${nodeText(nodes[gapStart]!)} is missing required \`#### Findings\` subsection.`);
+    }
+    const gap = (parseItems(markdown, nodes, gapStart, findingsHeading, true) as StatusItem[])[0]!;
+    return {
+      ...gap,
+      findings: parseItems(markdown, nodes, findingsHeading + 1, gapEnd, false, 5) as TextItem[],
+    };
+  });
 }
 
 function parseComponent(markdown: string, nodes: Node[], start: number, end: number): Component {
@@ -100,7 +119,6 @@ function parseComponent(markdown: string, nodes: Node[], start: number, end: num
   const [constraintsStart, constraintsEnd] = range("Constraints");
   const [decisionsStart, decisionsEnd] = range("Decisions");
   const [gapsStart, gapsEnd] = range("Knowledge Gaps");
-  const [findingsStart, findingsEnd] = range("Findings");
   const [notesStart, notesEnd] = range("Notes");
   const [questionsStart, questionsEnd] = range("Open Questions");
   void firstSection;
@@ -112,10 +130,52 @@ function parseComponent(markdown: string, nodes: Node[], start: number, end: num
     requirements: parseItems(markdown, nodes, requirementsStart, requirementsEnd, false) as TextItem[],
     constraints: parseItems(markdown, nodes, constraintsStart, constraintsEnd, false) as TextItem[],
     decisions: parseItems(markdown, nodes, decisionsStart, decisionsEnd, true) as StatusItem[],
-    knowledgeGaps: parseItems(markdown, nodes, gapsStart, gapsEnd, true) as StatusItem[],
-    findings: parseItems(markdown, nodes, findingsStart, findingsEnd, false) as TextItem[],
+    knowledgeGaps: parseKnowledgeGaps(markdown, nodes, gapsStart, gapsEnd),
     notes: parseItems(markdown, nodes, notesStart, notesEnd, false) as TextItem[],
     questions: questions.map((question) => ({ ...question, details: question.details.replace(/^>\s?/, "") })),
+  };
+}
+
+function parseBulletList(node: Node | undefined): string[] {
+  if (node?.type !== "list") return [];
+  return (node.children ?? []).map((item) => nodeText(item).trim()).filter(Boolean);
+}
+
+function parseActionItem(markdown: string, nodes: Node[], start: number, end: number): ActionItem {
+  const heading = nodeText(nodes[start]!).replace(/\*\*/g, "").trim();
+  const match = heading.match(/^(ACTION-\d+)\s*-\s*(.+)$/);
+  if (!match) throw new Error(`Plan Markdown error${lineLocation(nodes[start]!)}: invalid action item heading \`${heading}\`. Expected \`## **ACTION-<number> - <title>**\`.`);
+  const sections = new Map<string, number>();
+  for (let index = start + 1; index < end; index += 1) {
+    const node = nodes[index]!;
+    if (node.type === "heading" && node.depth === 3) sections.set(nodeText(node).replace(/\*\*/g, "").trim(), index);
+  }
+  const requiredSections = ["Acceptance Criteria", "Trigger Sources", "Assignees"];
+  for (const name of requiredSections) {
+    if (!sections.has(name)) throw new Error(`Plan Markdown error${lineLocation(nodes[start]!)}: ${match[1]} is missing required \`### ${name}\` subsection.`);
+  }
+  const firstSection = Math.min(...sections.values());
+  const preamble = contentBetween(markdown, nodes, start + 1, 3);
+  const statusMatch = preamble.match(/^(?:\*\*)?Status:(?:\*\*)?\s*(TODO|In Progress|Done|Closed)\s*(?:\n\n|\n)?/i);
+  if (!statusMatch) throw new Error(`Plan Markdown error${lineLocation(nodes[start]!)}: ${match[1]} has a missing or invalid status. Allowed values are TODO, In Progress, Done, and Closed.`);
+  const sectionEnd = (sectionStart: number) => [...sections.values()].filter((value) => value > sectionStart).sort((a, b) => a - b)[0] ?? end;
+  const acceptanceStart = sections.get("Acceptance Criteria")!;
+  const triggerStart = sections.get("Trigger Sources")!;
+  const assigneesStart = sections.get("Assignees")!;
+  const triggerEntries = parseBulletList(nodes.slice(triggerStart + 1, sectionEnd(triggerStart)).find((node) => node.type === "list"));
+  void firstSection;
+  return {
+    ref: match[1]!,
+    title: match[2]!.trim(),
+    status: statusMatch[1]!.toLowerCase() === "todo" ? "TODO" : statusMatch[1]!.replace(/\b\w/g, (value) => value.toUpperCase()) as ActionItem["status"],
+    context: preamble.slice(statusMatch[0].length).trim(),
+    acceptanceCriteria: parseItems(markdown, nodes, acceptanceStart + 1, sectionEnd(acceptanceStart), false) as TextItem[],
+    triggerSources: triggerEntries.map((entry) => {
+      const source = entry.match(/^(.+?)\s+-\s+(.+)$/);
+      if (!source) throw new Error(`Plan Markdown error: invalid trigger source \`${entry}\`. Expected \`- <reference> - <short description>\`.`);
+      return { ref: source[1]!, title: source[2]! };
+    }),
+    assignees: parseBulletList(nodes.slice(assigneesStart + 1, sectionEnd(assigneesStart)).find((node) => node.type === "list")),
   };
 }
 
@@ -125,11 +185,18 @@ export function parsePlanMarkdown(markdown: string): Plan {
   const nodes = tree.children ?? [];
   const componentsHeading = nodes.findIndex((node) => node.type === "heading" && node.depth === 1 && nodeText(node).trim() === "Components");
   if (componentsHeading < 0) throw new Error("Plan Markdown error: missing required `# Components` heading.");
+  const actionsHeading = nodes.findIndex((node) => node.type === "heading" && node.depth === 1 && nodeText(node).trim() === "Action Items");
+  if (actionsHeading < 0) throw new Error("Plan Markdown error: missing required `# Action Items` heading.");
   const componentStarts = nodes
     .map((node, index) => ({ node, index }))
-    .filter(({ node, index }) => index > componentsHeading && node.type === "heading" && node.depth === 2 && /^COMP-\d+\s*-/.test(nodeText(node).replace(/\*\*/g, "").trim()))
+    .filter(({ node, index }) => index > componentsHeading && index < actionsHeading && node.type === "heading" && node.depth === 2 && /^COMP-\d+\s*-/.test(nodeText(node).replace(/\*\*/g, "").trim()))
     .map(({ index }) => index);
-  const components = componentStarts.map((start, index) => parseComponent(parsed.content, nodes, start, componentStarts[index + 1] ?? nodes.length));
+  const components = componentStarts.map((start, index) => parseComponent(parsed.content, nodes, start, componentStarts[index + 1] ?? actionsHeading));
+  const actionStarts = nodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node, index }) => index > actionsHeading && node.type === "heading" && node.depth === 2 && /^ACTION-\d+\s*-/.test(nodeText(node).replace(/\*\*/g, "").trim()))
+    .map(({ index }) => index);
+  const actionItems = actionStarts.map((start, index) => parseActionItem(parsed.content, nodes, start, actionStarts[index + 1] ?? nodes.length));
   const result = planSchema.safeParse({
     reference: String(parsed.data.reference ?? "New"),
     title: parsed.data.title,
@@ -137,6 +204,7 @@ export function parsePlanMarkdown(markdown: string): Plan {
     tags: parsed.data.tags ?? [],
     status: parsed.data.status ?? "Draft",
     components,
+    actionItems,
   });
   if (!result.success) {
     const issues = result.error.issues.map((issue) => {
@@ -159,6 +227,14 @@ function renderItems(title: typeof sections[number], items: Array<TextItem | Sta
   return `### **${title}**\n\n${body}`.trimEnd();
 }
 
+function renderKnowledgeGaps(gaps: KnowledgeGap[]): string {
+  const body = gaps.map((gap) => {
+    const findings = gap.findings.map((finding) => `##### Finding ${finding.ref}${finding.title !== `Finding ${finding.ref}` ? ` - ${finding.title}` : ""}\n\n${finding.details}`.trimEnd()).join("\n\n");
+    return `#### Knowledge Gap ${gap.ref}${gap.title !== `Knowledge Gap ${gap.ref}` ? ` - ${gap.title}` : ""}\n\n**Status:** ${gap.status}\n\n${gap.details}\n\n#### Findings\n\n${findings}`.trimEnd();
+  }).join("\n\n");
+  return `### **Knowledge Gaps**\n\n${body}`.trimEnd();
+}
+
 export function formatPlanMarkdown(planInput: Plan): string {
   const plan = planSchema.parse(planInput);
   const frontmatter = YAML.stringify({
@@ -175,10 +251,15 @@ export function formatPlanMarkdown(planInput: Plan): string {
     renderItems("Requirements", component.requirements, "Requirement"),
     renderItems("Constraints", component.constraints, "Constraint"),
     renderItems("Decisions", component.decisions, "Decision"),
-    renderItems("Knowledge Gaps", component.knowledgeGaps, "Knowledge Gap"),
-    renderItems("Findings", component.findings, "Finding"),
+    renderKnowledgeGaps(component.knowledgeGaps),
     renderItems("Notes", component.notes, "Note"),
     renderItems("Open Questions", component.questions, "Question"),
   ].join("\n\n")).join("\n\n");
-  return `---\n${frontmatter}\n---\n\n# Components\n\n| Ref | Short Description |\n|---|---|\n${table}\n\n${components}\n`;
+  const actions = plan.actionItems.map((action) => {
+    const criteria = action.acceptanceCriteria.map((criterion) => `#### Acceptance Criteria ${criterion.ref}${criterion.title !== `Acceptance Criteria ${criterion.ref}` ? ` - ${criterion.title}` : ""}\n\n${criterion.details}`.trimEnd()).join("\n\n");
+    const sources = action.triggerSources.map((source) => `- ${source.ref} - ${source.title}`).join("\n");
+    const assignees = action.assignees.map((assignee) => `- ${assignee}`).join("\n");
+    return `## **${action.ref} - ${action.title}**\n\n**Status:** ${action.status}\n\n${action.context}\n\n### Acceptance Criteria\n\n${criteria}\n\n### Trigger Sources\n\n${sources}\n\n### Assignees\n\n${assignees}`.trimEnd();
+  }).join("\n\n");
+  return `---\n${frontmatter}\n---\n\n# Components\n\n| Ref | Short Description |\n|---|---|\n${table}\n\n${components}\n\n# Action Items\n\n${actions}\n`;
 }

@@ -34,7 +34,7 @@ Scripts are located with the skill so an installed skill remains self-contained.
 1. An agent organizes a user's brain dump into the canonical Markdown format.
 2. `sync-plan.sh` uploads the file bytes to `PUT /plans`.
 3. The API parses frontmatter and Markdown AST nodes into typed models.
-4. `PlanRepository.save` stores plan metadata, components, and classified items in one SQLite transaction.
+4. `PlanRepository.save` stores plan metadata, components, classified items, knowledge-gap findings, and action items in one SQLite transaction.
 5. The script downloads `GET /plans/:reference`; the API reconstructs canonical Markdown from database rows.
 6. MCP `list_plans` calls `GET /plans` and presents metadata to the agent.
 7. On an explicit user deletion request, MCP `delete_plan` calls `DELETE /plans/:reference`; SQLite cascades deletion to components and items.

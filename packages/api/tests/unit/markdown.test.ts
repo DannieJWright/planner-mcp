@@ -7,6 +7,8 @@ describe("plan Markdown", () => {
     const markdown = formatPlanMarkdown(samplePlan);
     expect(parsePlanMarkdown(markdown)).toEqual(samplePlan);
     expect(markdown).toContain("> Regarding monthly reviews");
+    expect(markdown).toContain("#### Findings\n\n##### Finding 1.A.1");
+    expect(markdown).toContain("# Action Items");
   });
 
   it("rejects decisions without a status", () => {
@@ -21,6 +23,16 @@ describe("plan Markdown", () => {
 
   it("rejects documents without the component root", () => {
     expect(() => parsePlanMarkdown("---\ntitle: Invalid\n---\n\nNo components")).toThrow("missing required `# Components` heading");
+  });
+
+  it("rejects knowledge gaps without a findings subsection", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace(/\n\n#### Findings[\s\S]*?(?=\n\n### \*\*Notes)/, "");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("missing required `#### Findings` subsection");
+  });
+
+  it("rejects documents without the action-items root", () => {
+    const markdown = formatPlanMarkdown({ ...samplePlan, actionItems: [] }).replace("\n# Action Items\n", "");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("missing required `# Action Items` heading");
   });
 
   it("identifies missing frontmatter fields", () => {
