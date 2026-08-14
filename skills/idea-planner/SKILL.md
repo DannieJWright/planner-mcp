@@ -29,6 +29,7 @@ Derive `<human-readable-topic-summary>` from a short summary of the topic title 
 - Do not read references, follow links, fetch URLs, inspect attachments, or open user-mentioned files unless the user explicitly permits that specific reading.
 - Treat the user's message as the complete source during Phase 0.
 - Preserve explicitly declared concepts as separate components.
+- Preserve user-provided examples and detailed material verbatim as specified in `Verbatim user material` below.
 - Never proceed between phases without explicit user permission.
 - Do not research, implement, or make decisions in this skill.
 
@@ -249,6 +250,18 @@ Store each proposition once according to its role. Related entries may reference
 
 When two candidate entries express the same proposition, keep the correctly classified entry and remove the duplicate. When they express different roles, retain both and make the relationship explicit.
 
+### Verbatim user material
+
+The plan is a durable record of the user's requirements, not a compressed restatement. Preserve every user-provided example and in-depth detail verbatim under the classified item it supports. This requirement applies even when the material is lengthy, repetitive-looking, informal, or already implies the surrounding requirement.
+
+- Copy code, code blocks, code samples, pseudocode, commands, configuration, data, specific cases, detailed scenarios, edge cases, acceptance examples, and Good/Bad examples exactly as the user supplied them.
+- Preserve wording, ordering, formatting, Markdown structure, indentation, blank lines within code blocks, identifiers, literal values, qualifiers, and distinctions such as *must*, *may*, *likely*, and *for now*. Do not rewrite, normalize, truncate, paraphrase, combine, or summarize this material.
+- Keep an example with the requirement, constraint, decision, note, or other item it illustrates. Retain all supplied Good and Bad examples, labeled clearly enough that their relationship remains unambiguous.
+- A short statement may introduce or classify an item, but it must not replace the user's detailed description or examples. Record the complete detail beneath it.
+- If one detailed example supports multiple distinct propositions, preserve the complete example with each proposition only when needed for the item to remain understandable. Otherwise preserve it once and use an explicit reference from the related item; never replace it with an agent-written summary.
+- Do not omit material because it appears implementation-specific, duplicates a conclusion, is inconvenient for the canonical format, or seems obvious. If it cannot be placed without an ambiguity, ask an Open Question rather than altering it.
+- Only user material may be called verbatim. Clearly distinguish any agent-authored classification label, brief connective text, or question from the preserved user text.
+
 ### Never inflate a user statement
 
 Record what the user said at the strength they said it.
@@ -269,7 +282,7 @@ Record what the user said at the strength they said it.
 5. Give every Knowledge Gap one empty `##### Findings` subsection unless the user already supplied information obtained after investigating that gap. Never invent Findings or duplicate an Open Question as a Knowledge Gap. Stub `Open Questions` if the agent has no clarification questions.
 6. Write (`PLAN_FILE`) using the exact output format below.
 7. Keep each distinct topic in its own requirement, constraint, or decision subsection. Never combine multiple topics in one item.
-8. Preserve explicit user examples under the item they illustrate, including both `Good` and `Bad` examples when supplied.
+8. Preserve explicit user examples and detailed material verbatim under the item they illustrate, including code blocks, specific cases, pseudocode, and both `Good` and `Bad` examples when supplied. Do not reduce a detailed user requirement to a short summary.
 9. Produce the Required Classification Rationale for every recorded entry. Quote the user's own words for Decisions. Separately report downgraded or omitted statements and explain which classification test they failed.
 10. Stop. State that Phase 0 is complete and wait for explicit permission to enter Phase 1.
 
@@ -281,7 +294,7 @@ Enter only when the user expressly asks to proceed.
 2. Critically assess each component for unclear scope, ambiguous wording, contradictions, user-owned Knowledge Gaps, duplicate propositions, and misclassified entries. Use Open Questions, not Knowledge Gaps, for clarification the agent needs from the user.
 3. Add focused questions to that component's `Open Questions`. Every question must cite its trigger, such as exact wording, a contradiction, knowledge-gap finding, or note. Enclose quoted user phrasing in quotation marks inside the block quote.
 4. Do not offer alternatives, recommend solutions, make choices, or lead the user toward a decision. Phase 1 refines known information only.
-5. Run each answer through the classification decision tree and incorporate every distinct proposition into the correct section. Behavioral expectations become Requirements; imposed external limitations become Constraints; unresolved choices become Open Decisions; selected choices become Decided Decisions; user-owned missing topic information becomes Knowledge Gaps; obtained gap information becomes Findings; and contextual reminders become Notes. Preserve explicit examples under the affected item. Remove answered questions after incorporating their answers; retain only unanswered questions.
+5. Run each answer through the classification decision tree and incorporate every distinct proposition into the correct section. Behavioral expectations become Requirements; imposed external limitations become Constraints; unresolved choices become Open Decisions; selected choices become Decided Decisions; user-owned missing topic information becomes Knowledge Gaps; obtained gap information becomes Findings; and contextual reminders become Notes. Preserve explicit examples and in-depth user detail verbatim under the affected item; never turn them into a short summary. Remove answered questions after incorporating their answers; retain only unanswered questions.
 6. If answers create new ambiguity, add focused follow-up questions and report them.
 7. Produce the Required Classification Rationale for every added, updated, moved, split, or removed entry. Quote Decisions and list downgrades and omissions with the failed classification test.
 8. Do not proceed until all agent clarification questions are resolved and every component is well-defined.
@@ -403,6 +416,8 @@ List every affected triggering component or component item by canonical referenc
 - Reading a linked specification or attachment without explicit permission.
 - Combining concepts the user explicitly separated.
 - Combining distinct topics into one requirement, constraint, or decision.
+- Replacing user-provided code, code blocks, pseudocode, specific cases, detailed examples, or `Good`/`Bad` examples with a paraphrase or brief summary.
+- Omitting detailed user requirement text because a shorter agent-written statement appears to capture its intent.
 - Turning requirements, constraints, notes, or acknowledgements into decisions.
 - Duplicating an agent clarification question under both `Open Questions` and `Knowledge Gaps`.
 - Creating a Knowledge Gap because the agent, rather than the user, lacks clarity about the request.
