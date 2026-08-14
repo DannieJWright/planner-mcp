@@ -86,14 +86,21 @@ function parseKnowledgeGaps(markdown: string, nodes: Node[], start: number, end:
 
   return gapStarts.map((gapStart, gapIndex) => {
     const gapEnd = gapStarts[gapIndex + 1] ?? end;
-    const findingsHeading = nodes.findIndex((node, index) => index > gapStart && index < gapEnd && node.type === "heading" && node.depth === 4 && nodeText(node).trim() === "Findings");
-    if (findingsHeading < 0) {
-      throw new Error(`Plan Markdown error${lineLocation(nodes[gapStart]!)}: ${nodeText(nodes[gapStart]!)} is missing required \`#### Findings\` subsection.`);
+    const findingsHeadings = nodes
+      .map((node, index) => ({ node, index }))
+      .filter(({ node, index }) => index > gapStart && index < gapEnd && node.type === "heading" && node.depth === 5 && nodeText(node).trim() === "Findings")
+      .map(({ index }) => index);
+    const findingsHeading = findingsHeadings[0];
+    if (findingsHeading === undefined) {
+      throw new Error(`Plan Markdown error${lineLocation(nodes[gapStart]!)}: ${nodeText(nodes[gapStart]!)} is missing required \`##### Findings\` subsection.`);
     }
-    const gap = (parseItems(markdown, nodes, gapStart, findingsHeading, true) as StatusItem[])[0]!;
+    if (findingsHeadings.length > 1) throw new Error(`Plan Markdown error${lineLocation(nodes[findingsHeadings[1]!]!)}: ${nodeText(nodes[gapStart]!)} contains more than one \`##### Findings\` subsection.`);
+    const nestedFinding = nodes.find((node, index) => index > findingsHeading && index < gapEnd && node.type === "heading" && /^Finding\s+/i.test(nodeText(node).trim()));
+    if (nestedFinding) throw new Error(`Plan Markdown error${lineLocation(nestedFinding)}: Findings must be direct content under \`##### Findings\`; remove the separate \`${nodeText(nestedFinding).trim()}\` heading.`);
+    const gap = (parseItems(markdown, nodes.slice(0, findingsHeading), gapStart, findingsHeading, true) as StatusItem[])[0]!;
     return {
       ...gap,
-      findings: parseItems(markdown, nodes, findingsHeading + 1, gapEnd, false, 5) as TextItem[],
+      findings: contentBetween(markdown, nodes, findingsHeading + 1, 5),
     };
   });
 }
@@ -105,7 +112,15 @@ function parseComponent(markdown: string, nodes: Node[], start: number, end: num
   const sectionIndexes = new Map<string, number>();
   for (let index = start + 1; index < end; index += 1) {
     const node = nodes[index]!;
-    if (node.type === "heading" && node.depth === 3) sectionIndexes.set(nodeText(node).replace(/\*\*/g, "").trim(), index);
+    if (node.type === "heading" && node.depth === 3) {
+      const name = nodeText(node).replace(/\*\*/g, "").trim();
+      if (!sections.includes(name as typeof sections[number])) throw new Error(`Plan Markdown error${lineLocation(node)}: ${match[1]} contains unsupported \`### ${name}\` subsection.`);
+      if (sectionIndexes.has(name)) throw new Error(`Plan Markdown error${lineLocation(node)}: ${match[1]} contains duplicate \`### ${name}\` subsections.`);
+      sectionIndexes.set(name, index);
+    }
+  }
+  for (const name of sections) {
+    if (!sectionIndexes.has(name)) throw new Error(`Plan Markdown error${lineLocation(nodes[start]!)}: ${match[1]} is missing required \`### ${name}\` subsection.`);
   }
   const firstSection = Math.min(...sectionIndexes.values(), end);
   const description = contentBetween(markdown, nodes, start + 1, 3);
@@ -183,10 +198,18 @@ export function parsePlanMarkdown(markdown: string): Plan {
   const parsed = matter(markdown);
   const tree = fromMarkdown(parsed.content) as Node;
   const nodes = tree.children ?? [];
-  const componentsHeading = nodes.findIndex((node) => node.type === "heading" && node.depth === 1 && nodeText(node).trim() === "Components");
-  if (componentsHeading < 0) throw new Error("Plan Markdown error: missing required `# Components` heading.");
-  const actionsHeading = nodes.findIndex((node) => node.type === "heading" && node.depth === 1 && nodeText(node).trim() === "Action Items");
-  if (actionsHeading < 0) throw new Error("Plan Markdown error: missing required `# Action Items` heading.");
+  const rootHeadings = nodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node }) => node.type === "heading" && node.depth === 1);
+  const componentHeadings = rootHeadings.filter(({ node }) => nodeText(node).trim() === "Components");
+  const actionHeadings = rootHeadings.filter(({ node }) => nodeText(node).trim() === "Action Items");
+  if (componentHeadings.length === 0) throw new Error("Plan Markdown error: missing required `# Components` heading.");
+  if (componentHeadings.length > 1) throw new Error("Plan Markdown error: document contains more than one `# Components` heading.");
+  if (actionHeadings.length === 0) throw new Error("Plan Markdown error: missing required `# Action Items` heading.");
+  if (actionHeadings.length > 1) throw new Error("Plan Markdown error: document contains more than one `# Action Items` heading.");
+  const componentsHeading = componentHeadings[0]!.index;
+  const actionsHeading = actionHeadings[0]!.index;
+  if (actionsHeading < componentsHeading) throw new Error("Plan Markdown error: `# Action Items` must appear after `# Components`.");
   const componentStarts = nodes
     .map((node, index) => ({ node, index }))
     .filter(({ node, index }) => index > componentsHeading && index < actionsHeading && node.type === "heading" && node.depth === 2 && /^COMP-\d+\s*-/.test(nodeText(node).replace(/\*\*/g, "").trim()))
@@ -229,8 +252,7 @@ function renderItems(title: typeof sections[number], items: Array<TextItem | Sta
 
 function renderKnowledgeGaps(gaps: KnowledgeGap[]): string {
   const body = gaps.map((gap) => {
-    const findings = gap.findings.map((finding) => `##### Finding ${finding.ref}${finding.title !== `Finding ${finding.ref}` ? ` - ${finding.title}` : ""}\n\n${finding.details}`.trimEnd()).join("\n\n");
-    return `#### Knowledge Gap ${gap.ref}${gap.title !== `Knowledge Gap ${gap.ref}` ? ` - ${gap.title}` : ""}\n\n**Status:** ${gap.status}\n\n${gap.details}\n\n#### Findings\n\n${findings}`.trimEnd();
+    return `#### Knowledge Gap ${gap.ref}${gap.title !== `Knowledge Gap ${gap.ref}` ? ` - ${gap.title}` : ""}\n\n**Status:** ${gap.status}\n\n${gap.details}\n\n##### Findings\n\n${gap.findings}`.trimEnd();
   }).join("\n\n");
   return `### **Knowledge Gaps**\n\n${body}`.trimEnd();
 }

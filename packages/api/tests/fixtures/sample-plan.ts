@@ -18,7 +18,7 @@ export const samplePlan: Plan = {
       title: "Knowledge Gap 1.A",
       status: "Open",
       details: "Measure peak event volume.",
-      findings: [{ ref: "1.A.1", title: "Finding 1.A.1", details: "Peak volume is 400 events per second." }],
+      findings: "Peak volume is 400 events per second.",
     }],
     notes: [{ ref: "1.A", title: "Note 1.A", details: "The current export is CSV and Finance reviews reports monthly." }],
     questions: [{ ref: "1.A", title: "Question 1.A", details: "Regarding monthly reviews, which timezone defines month end?" }],

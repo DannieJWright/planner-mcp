@@ -7,7 +7,7 @@ describe("plan Markdown", () => {
     const markdown = formatPlanMarkdown(samplePlan);
     expect(parsePlanMarkdown(markdown)).toEqual(samplePlan);
     expect(markdown).toContain("> Regarding monthly reviews");
-    expect(markdown).toContain("#### Findings\n\n##### Finding 1.A.1");
+    expect(markdown).toContain("##### Findings\n\nPeak volume is 400 events per second.");
     expect(markdown).toContain("# Action Items");
   });
 
@@ -26,13 +26,38 @@ describe("plan Markdown", () => {
   });
 
   it("rejects knowledge gaps without a findings subsection", () => {
-    const markdown = formatPlanMarkdown(samplePlan).replace(/\n\n#### Findings[\s\S]*?(?=\n\n### \*\*Notes)/, "");
-    expect(() => parsePlanMarkdown(markdown)).toThrow("missing required `#### Findings` subsection");
+    const markdown = formatPlanMarkdown(samplePlan).replace(/\n\n##### Findings[\s\S]*?(?=\n\n### \*\*Notes)/, "");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("missing required `##### Findings` subsection");
+  });
+
+  it("rejects findings as a peer of knowledge gaps", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace("##### Findings", "#### Findings");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("missing required `##### Findings` subsection");
+  });
+
+  it("rejects separately headed finding items", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace("Peak volume is 400 events per second.", "###### Finding 1.A\n\nPeak volume is 400 events per second.");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("Findings must be direct content under `##### Findings`");
+  });
+
+  it("rejects components missing a required section", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace(/\n\n### \*\*Constraints\*\*[\s\S]*?(?=\n\n### \*\*Decisions)/, "");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("COMP-1 is missing required `### Constraints` subsection");
+  });
+
+  it("rejects component-level findings sections", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace("### **Notes**", "### **Findings**\n\nUnsupported.\n\n### **Notes**");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("COMP-1 contains unsupported `### Findings` subsection");
   });
 
   it("rejects documents without the action-items root", () => {
     const markdown = formatPlanMarkdown({ ...samplePlan, actionItems: [] }).replace("\n# Action Items\n", "");
     expect(() => parsePlanMarkdown(markdown)).toThrow("missing required `# Action Items` heading");
+  });
+
+  it("rejects duplicate action-items roots", () => {
+    const markdown = `${formatPlanMarkdown(samplePlan)}\n# Action Items\n`;
+    expect(() => parsePlanMarkdown(markdown)).toThrow("document contains more than one `# Action Items` heading");
   });
 
   it("identifies missing frontmatter fields", () => {

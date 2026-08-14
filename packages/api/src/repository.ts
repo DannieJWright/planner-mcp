@@ -152,10 +152,10 @@ export class PlanRepository {
         }));
         component.knowledgeGaps.forEach((gap, position) => {
           const gapResult = insertItem.run(result.lastInsertRowid, "knowledge_gap", gap.ref, gap.title, gap.details, gap.status, position);
-          gap.findings.forEach((finding, findingPosition) => this.database.prepare(`
+          this.database.prepare(`
             INSERT INTO knowledge_gap_findings(knowledge_gap_id, ref, title, details, position)
             VALUES (?, ?, ?, ?, ?)
-          `).run(gapResult.lastInsertRowid, finding.ref, finding.title, finding.details, findingPosition));
+          `).run(gapResult.lastInsertRowid, "findings", "Findings", gap.findings, 0);
         });
       });
       const insertAction = this.database.prepare(`
@@ -208,7 +208,7 @@ export class PlanRepository {
         const field = itemFields[item.kind as keyof typeof itemFields];
         if (!field) throw new Error(`Unknown item kind in database: ${item.kind}`);
         if (field === "knowledgeGaps") {
-          const findings = this.database.prepare("SELECT ref, title, details FROM knowledge_gap_findings WHERE knowledge_gap_id = ? ORDER BY position").all(item.id) as unknown as TextItem[];
+          const findings = (this.database.prepare("SELECT details FROM knowledge_gap_findings WHERE knowledge_gap_id = ? ORDER BY position").all(item.id) as unknown as Array<{ details: string }>).map(({ details }) => details).join("\n\n");
           component.knowledgeGaps.push({ ref: item.ref, title: item.title, details: item.details, status: item.status!, findings });
         } else if (field === "decisions") {
           component[field].push({ ref: item.ref, title: item.title, details: item.details, status: item.status! });

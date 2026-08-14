@@ -35,4 +35,18 @@ describe("PlanRepository", () => {
     expect(repository.database.prepare("SELECT COUNT(*) AS count FROM action_items").get()).toEqual({ count: 0 });
     expect(repository.delete(reference)).toBe(false);
   });
+
+  it("preserves legacy finding rows as one direct findings body", () => {
+    const repository = new PlanRepository(":memory:");
+    repositories.push(repository);
+    const reference = repository.save(samplePlan);
+    const gap = repository.database.prepare("SELECT id FROM items WHERE kind = 'knowledge_gap'").get() as { id: number };
+    repository.database.prepare("UPDATE knowledge_gap_findings SET details = ? WHERE knowledge_gap_id = ?").run("First legacy finding.", gap.id);
+    repository.database.prepare(`
+      INSERT INTO knowledge_gap_findings(knowledge_gap_id, ref, title, details, position)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(gap.id, "1.A.2", "Finding 1.A.2", "Second legacy finding.", 1);
+
+    expect(repository.get(reference)?.components[0]?.knowledgeGaps[0]?.findings).toBe("First legacy finding.\n\nSecond legacy finding.");
+  });
 });

@@ -15,7 +15,7 @@ const statusItemSchema = textItemSchema.extend({
 });
 
 export const knowledgeGapSchema = statusItemSchema.extend({
-  findings: z.array(textItemSchema),
+  findings: z.string(),
 });
 
 export const actionItemSchema = z.object({

@@ -40,16 +40,17 @@ Classify every statement before choosing a section:
 |---|---|---|
 | Requirement | Stakeholder-set behavior or outcome the solution must satisfy | `Requirements` |
 | Constraint | Unavoidable platform, integration, physical, compatibility, or imposed limitation | `Constraints` |
-| Decision | A user choice among viable alternatives with a real rejected alternative | `Decisions` |
-| Knowledge gap | Missing information requiring research, experiment, data, or conversation before choices can be made | `Knowledge Gaps` |
+| Decision | A choice among viable alternatives, whether still open or already selected | `Decisions` |
+| Knowledge gap | Topic information the user lacks and must obtain through research, experiment, data, or external conversation | `Knowledge Gaps` |
 | Note | Context that informs judgment but neither obliges nor chooses | `Notes` |
+| Open question | A question the agent asks the user to clarify intent, ambiguity, contradiction, or component scope | `Open Questions` |
 
-Before recording a decision, ask all four gates:
+Before recording a decision, ask these gates:
 
 1. Could the opposite reasonably have been chosen? If not, record a constraint or note.
-2. Can a real rejected alternative be named from the user's information? If not, do not call it a decision.
-3. Did the user choose it, rather than merely acknowledge a fact?
-4. Would it be revisited by choosing differently, rather than only because the world changed?
+2. Is there a choice to make among viable alternatives? If not, do not call it a decision.
+3. If the user selected an alternative, mark the decision `Decided`; otherwise preserve the unresolved choice as `Open`.
+4. Did the user describe a choice, rather than merely acknowledge a fact?
 
 Separate a constraint from any choice made in response to it. Requirements express stakeholder expectations; constraints arise from unavoidable external or integration realities. Acknowledging a fact is not choosing it.
 
@@ -100,24 +101,38 @@ These should include information like:
  - How many teams will be affected by a change to the API contract?
  
 Knowledge gaps are often related to decisions, the resolution of the knowledge gaps may directly affect which options are selected. The point of knowledge gaps are to help produce the follow up action components, and may only be closed out from real data, research, experiments, or conversations.
+
+### Knowledge gaps versus open questions
+
+Classify based on who lacks the information and how it can be resolved:
+
+- A **Knowledge Gap** records topic information the user does not have. Resolving it requires research, an experiment, data, or an external conversation.
+- An **Open Question** records clarification the agent needs from the user to understand the request, resolve ambiguity or contradiction, or define component scope.
+- Never copy an agent clarification question into `Knowledge Gaps`. An unanswered Open Question remains only an Open Question.
+- Do not create a Knowledge Gap merely because the agent is unsure how to interpret or implement the user's request.
+- When the user answers an Open Question, remove that question and fold the answer into the appropriate requirement, constraint, decision, note, or other section. The resulting entry must stand alone without the original question and answer.
+
+Examples:
+
+- "We do not know whether the external service supports bulk export; check its documentation" → **Knowledge Gap**.
+- "When you say bulk export, do you require one archive or separate files?" → **Open Question**.
+- The second example must not also appear as a Knowledge Gap.
  
 ### Never inflate a user statement
  
 Record what the user said, at the strength they said it.
- - Do not convert "we need to work out how X should behave" into a decision
-   about how X behaves. That is an **open decision**, plus a follow-up action.
+ - Do not convert "we need to work out how X should behave" into a decided
+   outcome. Record the unresolved choice as an **open decision**.
  - Do not convert "check what the other framework does" into a conclusion about
    what ours will do.
- - Do not invent a rejected alternative to justify promoting a statement to a
-   decision. If you cannot name one the user actually ruled out, there is no
-   decision yet.
+ - Do not invent a selected or rejected alternative. An unresolved choice may
+   be an open decision, but its details must not claim that an option was chosen.
  - Do not attach a `Why` the user did not give. If you infer the reasoning, mark
    it `inferred, unconfirmed` and ask.
  - Words like *likely*, *probably*, *for now*, and *may* are hedges. Preserve
-   them verbatim. A hedged statement is an open decision with a stated leaning,
-   not a decision.
+   them verbatim. A hedged choice is an open decision with a stated leaning,
+   not a decided outcome.
  
-Use `**Confirmed by user:** yes` only when the user confirmed a **choice**.
 Never treat a fact the user merely agreed was accurate as a post-research knowledge-gap finding.
 
 ## Phase 0 - Decomposition
@@ -126,11 +141,11 @@ Never treat a fact the user merely agreed was accurate as a post-research knowle
 2. Extract concrete concepts that need independent clarification. Keep user-declared concepts separate even if related.
 3. Propose a numbered component list with 3-7 word descriptions and ask the user to confirm it.
 4. After confirmation, classify the supplied statements into requirements, constraints, decisions, knowledge gaps, and notes.
-5. Give every knowledge gap an empty `Findings` subsection unless the user already supplied post-research information for that gap. Stub `Open Questions` if the user supplied none. Do not invent content merely to fill a section.
+5. Give every knowledge gap an empty `Findings` subsection unless the user already supplied post-research information for that gap. Stub `Open Questions` if the user supplied none. Never duplicate an Open Question as a Knowledge Gap. Do not invent content merely to fill a section.
 6. Write (`PLAN_FILE`) using the exact output format below.
 7. Keep each distinct topic in its own requirement, constraint, or decision subsection. Never combine multiple topics in one item.
 8. Preserve explicit user examples under the item they illustrate, including both `Good` and `Bad` examples when supplied.
-9. Report every recorded entry as `kind -> section`. Quote the user's own words for decisions. Separately report downgraded or omitted statements, and flag anything that lacked a rejected alternative.
+9. Report every recorded entry as `kind -> section`. Quote the user's own words for decisions. Separately report downgraded or omitted statements.
 10. Stop. State that Phase 0 is complete and wait for explicit permission to enter Phase 1.
 
 ## Phase 1 - User Refinement
@@ -141,9 +156,9 @@ Enter only when the user expressly asks to proceed.
 2. Critically assess each component for unclear scope, ambiguous wording, contradictions, and knowledge gaps.
 3. Add focused questions to that component's `Open Questions`. Every question must cite its trigger, such as exact wording, a contradiction, knowledge-gap finding, or note. Enclose quoted user phrasing in quotation marks inside the block quote.
 4. Do not offer alternatives, recommend solutions, make choices, or lead the user toward a decision. Phase 1 refines known information only.
-5. Incorporate answers naturally into the correctly classified sections. Behavioral clarifications become requirements; external process or tooling restrictions become constraints; statements that something remains undecided become decisions; and statements to keep something in mind become notes. Preserve explicit examples under the affected item. Mark answered questions answered, unanswered questions open, and irrelevant questions closed.
+5. Incorporate answers naturally into the correctly classified sections. Behavioral clarifications become requirements; external process or tooling restrictions become constraints; unresolved choices become open decisions; and statements to keep something in mind become notes. Preserve explicit examples under the affected item. Remove answered questions after incorporating their answers; retain only unanswered questions.
 6. If answers create new ambiguity, add focused follow-up questions and report them.
-7. For every answer folded in, report `kind -> section`, quote decisions, and list downgrades, omissions, and statements lacking rejected alternatives.
+7. For every answer folded in, report `kind -> section`, quote decisions, and list downgrades and omissions.
 8. Do not proceed until all agent clarification questions are resolved and every component is well-defined.
 9. Stop and wait for the user's explicit statement that they finished filling out the document and want Phase 2.
 
@@ -209,11 +224,9 @@ status: Draft
 
 <details>
 
-#### Findings
+##### Findings
 
-##### Finding 1.A.1
-
-<post-research information produced by an action item for this knowledge gap>
+<direct post-research information produced for this knowledge gap>
 
 ### **Notes**
 
@@ -266,6 +279,8 @@ List every affected triggering item by reference and short description. Use bull
 - Combining concepts the user explicitly separated.
 - Combining distinct topics into one requirement, constraint, or decision.
 - Turning requirements, constraints, notes, or acknowledgements into decisions.
+- Duplicating an agent clarification question under both `Open Questions` and `Knowledge Gaps`.
+- Creating a Knowledge Gap because the agent, rather than the user, lacks clarity about the request.
 - Recording generic information as a finding instead of a note.
 - Inventing action items or omitting the empty `# Action Items` heading.
 - Filling stub sections with invented content.
