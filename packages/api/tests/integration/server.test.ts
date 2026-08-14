@@ -42,6 +42,12 @@ describe("REST API", () => {
     resources.push({ app, repository });
     expect((await app.inject({ method: "GET", url: "/plans/missing" })).statusCode).toBe(404);
     expect((await app.inject({ method: "PUT", url: "/plans", headers: { "content-type": "text/markdown" }, payload: "invalid" })).statusCode).toBe(400);
+
+    const invalidPlan = formatPlanMarkdown(samplePlan).replace("**Status:** Open\n\nChoose batch", "Choose batch");
+    const response = await app.inject({ method: "PUT", url: "/plans", headers: { "content-type": "text/markdown" }, payload: invalidPlan });
+    expect(response.json()).toEqual({
+      error: expect.stringContaining("Decision 1.A has missing required status. Add `**Status:** Open`"),
+    });
   });
 
   it("deletes a plan by reference", async () => {

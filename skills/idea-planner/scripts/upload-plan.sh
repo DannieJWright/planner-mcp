@@ -14,10 +14,23 @@ if [[ ! -f "$plan_file" ]]; then
   exit 2
 fi
 
-response=$(curl --fail-with-body --silent --show-error \
+response_file=$(mktemp)
+trap 'rm -f "$response_file"' EXIT
+if ! status=$(curl --silent --show-error \
+  --output "$response_file" \
+  --write-out '%{http_code}' \
   --request PUT \
   --header 'Content-Type: text/markdown' \
   --data-binary "@$plan_file" \
-  "${api_url%/}/plans")
+  "${api_url%/}/plans"); then
+  printf 'Failed to contact Planner API.\n' >&2
+  exit 1
+fi
+response=$(<"$response_file")
+
+if [[ ! "$status" =~ ^2 ]]; then
+  node -e 'let message; try { const data=JSON.parse(process.argv[1]); message=data.error; } catch {} process.stderr.write((typeof message==="string" ? message : process.argv[1] || "Planner API request failed")+"\n")' "$response"
+  exit 1
+fi
 
 node -e 'const data=JSON.parse(process.argv[1]); if(typeof data.reference!=="string") throw new Error("API response has no reference"); process.stdout.write(data.reference+"\n")' "$response"

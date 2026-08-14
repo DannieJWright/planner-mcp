@@ -28,13 +28,36 @@ describe("skill scripts", () => {
     const address = await app.listen({ host: "127.0.0.1", port: 0 });
     const directory = await mkdtemp(join(tmpdir(), "planner-e2e-"));
     const planPath = join(directory, "plan with spaces.md");
-    await writeFile(planPath, formatPlanMarkdown(samplePlan));
+    const formattedDetails = "Run `npm test`.\n\n```markdown\n### This heading is code\n`inline in code`\n```";
+    const plan = {
+      ...samplePlan,
+      components: [{ ...samplePlan.components[0]!, requirements: [{ ref: "1.A", title: "Code example", details: formattedDetails }] }],
+    };
+    await writeFile(planPath, formatPlanMarkdown(plan));
     const script = resolve(process.cwd(), "../../skills/idea-planner/scripts/sync-plan.sh");
 
     const { stdout } = await execute(script, [planPath], { env: { ...process.env, PLANNER_API_URL: address } });
     const reference = stdout.trim();
     expect(reference).toMatch(/^PLAN-/);
-    expect(parsePlanMarkdown(await readFile(planPath, "utf8")).reference).toBe(reference);
+    const syncedMarkdown = await readFile(planPath, "utf8");
+    expect(parsePlanMarkdown(syncedMarkdown).reference).toBe(reference);
+    expect(syncedMarkdown).toContain(formattedDetails);
+    expect(repository.get(reference)?.components[0]?.requirements[0]?.details).toBe(formattedDetails);
     expect(repository.list()).toHaveLength(1);
+  });
+
+  it("prints actionable API validation errors", async () => {
+    repository = new PlanRepository(":memory:");
+    app = createServer({ repository });
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    const directory = await mkdtemp(join(tmpdir(), "planner-e2e-"));
+    const planPath = join(directory, "invalid-plan.md");
+    const invalidPlan = formatPlanMarkdown(samplePlan).replace("**Status:** Open\n\nChoose batch", "Choose batch");
+    await writeFile(planPath, invalidPlan);
+    const script = resolve(process.cwd(), "../../skills/idea-planner/scripts/upload-plan.sh");
+
+    await expect(execute(script, [planPath], { env: { ...process.env, PLANNER_API_URL: address } })).rejects.toMatchObject({
+      stderr: expect.stringContaining("Decision 1.A has missing required status. Add `**Status:** Open`"),
+    });
   });
 });

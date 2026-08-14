@@ -11,11 +11,21 @@ describe("plan Markdown", () => {
 
   it("rejects decisions without a status", () => {
     const markdown = formatPlanMarkdown(samplePlan).replace("**Status:** Open\n\nChoose batch", "Choose batch");
-    expect(() => parsePlanMarkdown(markdown)).toThrow("Missing or invalid status");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("Decision 1.A has missing required status. Add `**Status:** Open` immediately below the heading; allowed values are Open, Decided, Resolved, and Closed.");
+  });
+
+  it("reports invalid statuses with the item and accepted values", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace("**Status:** Open", "**Status:** Answered");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("Decision 1.A has invalid status `Answered`");
   });
 
   it("rejects documents without the component root", () => {
-    expect(() => parsePlanMarkdown("---\ntitle: Invalid\n---\n\nNo components")).toThrow("Missing # Components heading");
+    expect(() => parsePlanMarkdown("---\ntitle: Invalid\n---\n\nNo components")).toThrow("missing required `# Components` heading");
+  });
+
+  it("identifies missing frontmatter fields", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace("title: Analytics refresh\n", "");
+    expect(() => parsePlanMarkdown(markdown)).toThrow("`frontmatter.title`: Required");
   });
 
   it("preserves fenced and inline code in section content", () => {

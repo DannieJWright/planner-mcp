@@ -9,7 +9,7 @@ type Node = {
   value?: string;
   children?: Node[];
   position?: {
-    start: { offset?: number };
+    start: { line?: number; offset?: number };
     end: { offset?: number };
   };
 };
@@ -27,6 +27,10 @@ const sections = [
 function nodeText(node: Node): string {
   if (typeof node.value === "string") return node.value;
   return (node.children ?? []).map(nodeText).join("");
+}
+
+function lineLocation(node: Node): string {
+  return node.position?.start.line === undefined ? "" : ` on line ${node.position.start.line}`;
 }
 
 function contentBetween(markdown: string, nodes: Node[], start: number, headingDepth: number): string {
@@ -50,13 +54,21 @@ function parseItems(markdown: string, nodes: Node[], start: number, end: number,
     if (node.type !== "heading" || node.depth !== 4) continue;
     const heading = nodeText(node).trim();
     const match = heading.match(/^(?:Requirement|Constraint|Decision|Knowledge Gap|Finding|Note|Question)\s+([\w.-]+)(?:\s*[-:]\s*(.*))?$/i);
-    if (!match) throw new Error(`Invalid item heading: ${heading}`);
+    if (!match) {
+      throw new Error(`Plan Markdown error${lineLocation(node)}: invalid item heading \`${heading}\`. Expected \`#### <Item Type> <reference> - <title>\`, for example \`#### Requirement 1.A - Upload plans\`.`);
+    }
     const ref = match[1]!;
     const title = match[2]?.trim() || heading;
     let details = contentBetween(markdown, nodes, index + 1, 4);
     if (statusRequired) {
       const statusMatch = details.match(/^(?:\*\*)?Status:(?:\*\*)?\s*(Open|Decided|Resolved|Closed)\s*(?:\n\n|\n)?/i);
-      if (!statusMatch) throw new Error(`Missing or invalid status for ${heading}`);
+      if (!statusMatch) {
+        const suppliedStatus = details.match(/^(?:\*\*)?Status:(?:\*\*)?\s*([^\n]*)/i)?.[1]?.trim();
+        const problem = suppliedStatus
+          ? `invalid status \`${suppliedStatus}\``
+          : "missing required status";
+        throw new Error(`Plan Markdown error${lineLocation(node)}: ${heading} has ${problem}. Add \`**Status:** Open\` immediately below the heading; allowed values are Open, Decided, Resolved, and Closed.`);
+      }
       details = details.slice(statusMatch[0].length).trim();
       const normalized = statusMatch[1]![0]!.toUpperCase() + statusMatch[1]!.slice(1).toLowerCase();
       items.push({ ref, title, status: normalized as StatusItem["status"], details });
@@ -70,7 +82,7 @@ function parseItems(markdown: string, nodes: Node[], start: number, end: number,
 function parseComponent(markdown: string, nodes: Node[], start: number, end: number): Component {
   const heading = nodeText(nodes[start]!).replace(/\*\*/g, "").trim();
   const match = heading.match(/^(COMP-\d+)\s*-\s*(.+)$/);
-  if (!match) throw new Error(`Invalid component heading: ${heading}`);
+  if (!match) throw new Error(`Plan Markdown error${lineLocation(nodes[start]!)}: invalid component heading \`${heading}\`. Expected \`## **COMP-<number> - <title>**\`.`);
   const sectionIndexes = new Map<string, number>();
   for (let index = start + 1; index < end; index += 1) {
     const node = nodes[index]!;
@@ -112,13 +124,13 @@ export function parsePlanMarkdown(markdown: string): Plan {
   const tree = fromMarkdown(parsed.content) as Node;
   const nodes = tree.children ?? [];
   const componentsHeading = nodes.findIndex((node) => node.type === "heading" && node.depth === 1 && nodeText(node).trim() === "Components");
-  if (componentsHeading < 0) throw new Error("Missing # Components heading");
+  if (componentsHeading < 0) throw new Error("Plan Markdown error: missing required `# Components` heading.");
   const componentStarts = nodes
     .map((node, index) => ({ node, index }))
     .filter(({ node, index }) => index > componentsHeading && node.type === "heading" && node.depth === 2 && /^COMP-\d+\s*-/.test(nodeText(node).replace(/\*\*/g, "").trim()))
     .map(({ index }) => index);
   const components = componentStarts.map((start, index) => parseComponent(parsed.content, nodes, start, componentStarts[index + 1] ?? nodes.length));
-  return planSchema.parse({
+  const result = planSchema.safeParse({
     reference: String(parsed.data.reference ?? "New"),
     title: parsed.data.title,
     description: parsed.data.description ?? "",
@@ -126,6 +138,16 @@ export function parsePlanMarkdown(markdown: string): Plan {
     status: parsed.data.status ?? "Draft",
     components,
   });
+  if (!result.success) {
+    const issues = result.error.issues.map((issue) => {
+      const path = issue.path[0] === "title" || issue.path[0] === "description" || issue.path[0] === "tags" || issue.path[0] === "status" || issue.path[0] === "reference"
+        ? `frontmatter.${issue.path.join(".")}`
+        : issue.path.join(".");
+      return `\`${path || "document"}\`: ${issue.message}`;
+    });
+    throw new Error(`Plan Markdown error: invalid or missing document fields: ${issues.join("; ")}.`);
+  }
+  return result.data;
 }
 
 function renderItems(title: typeof sections[number], items: Array<TextItem | StatusItem>, label: string): string {
