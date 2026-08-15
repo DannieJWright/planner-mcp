@@ -61,26 +61,6 @@ export const planSchema = z.object({
   status: z.enum(planStatuses),
   components: z.array(componentSchema),
   actionItems: z.array(actionItemSchema),
-}).superRefine((plan, context) => {
-  const sourceReferences = new Set<string>();
-  for (const component of plan.components) {
-    sourceReferences.add(component.ref);
-    for (const item of component.requirements) sourceReferences.add(`Requirement ${item.ref}`);
-    for (const item of component.constraints) sourceReferences.add(`Constraint ${item.ref}`);
-    for (const item of component.decisions) sourceReferences.add(`Decision ${item.ref}`);
-    for (const item of component.knowledgeGaps) sourceReferences.add(`Knowledge Gap ${item.ref}`);
-    for (const item of component.notes) sourceReferences.add(`Note ${item.ref}`);
-    for (const item of component.questions) sourceReferences.add(`Question ${item.ref}`);
-  }
-  plan.actionItems.forEach((action, actionIndex) => action.triggerSources.forEach((source, sourceIndex) => {
-    if (!sourceReferences.has(source.ref)) {
-      context.addIssue({
-        code: "custom",
-        path: ["actionItems", actionIndex, "triggerSources", sourceIndex, "ref"],
-        message: `Trigger Source ${source.ref} does not resolve to a component or component item in this plan`,
-      });
-    }
-  }));
 });
 
 export type TextItem = z.infer<typeof textItemSchema>;
