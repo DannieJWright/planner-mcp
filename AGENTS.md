@@ -16,6 +16,13 @@ Read `README.md` and `docs/REPOSITORY_MAP.md` before changing package boundaries
 - Shell downloads must remain atomic and scripts must quote file paths.
 - Do not weaken or remove automated testing. Add tests at the boundary affected by each change.
 
+## Plan Normalization
+
+- Plan numbering is normalized by the backend during Markdown ingest and sync. Agents must not renumber components or subsections themselves.
+- Agents do not need to reorder plan files before upload. The sync process orders components by their document order and assigns canonical component and subsection references automatically.
+- Reference rewriting is centralized in `packages/api/src/markdown.ts`. If a new component subsection or reference-bearing section is added, update the `referenceTypes` registry with its label, aliases, and model key so its references are renumbered and rewritten consistently.
+- Add parser, formatter, API, and round-trip tests whenever a new reference-bearing section is introduced. Unknown references should remain unchanged and be reported through `validationFailures.ordering`.
+
 ## Commands
 
 ```sh
