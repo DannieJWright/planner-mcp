@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { formatPlanMarkdown, parsePlanMarkdown } from "./markdown.js";
+import { formatPlanMarkdown, ingestPlanMarkdown } from "./markdown.js";
 import { PlanRepository } from "./repository.js";
 
 export type ServerOptions = {
@@ -21,8 +21,9 @@ export function createServer(options: ServerOptions = {}): FastifyInstance {
   app.put<{ Body: string }>("/plans", async (request, reply) => {
     if (typeof request.body !== "string") return reply.code(400).send({ error: "Expected a Markdown request body" });
     try {
-      const reference = repository.save(parsePlanMarkdown(request.body));
-      return { reference };
+      const { plan, validationFailures } = ingestPlanMarkdown(request.body);
+      const reference = repository.save(plan);
+      return { reference, validationFailures };
     } catch (error) {
       return reply.code(400).send({ error: error instanceof Error ? error.message : "Invalid plan" });
     }

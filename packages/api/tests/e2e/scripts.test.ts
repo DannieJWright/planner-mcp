@@ -31,7 +31,7 @@ describe("skill scripts", () => {
     const formattedDetails = "Run `npm test`.\n\n```markdown\n### This heading is code\n`inline in code`\n```";
     const plan = {
       ...samplePlan,
-      components: [{ ...samplePlan.components[0]!, requirements: [{ ref: "1.A", title: "Code example", details: formattedDetails }] }],
+      components: [{ ...samplePlan.components[0]!, ref: "COMP-4", requirements: [{ ref: "4.A", title: "Code example", details: formattedDetails }] }],
     };
     await writeFile(planPath, formatPlanMarkdown(plan));
     const script = resolve(process.cwd(), "../../skills/idea-planner/scripts/sync-plan.sh");
@@ -41,6 +41,8 @@ describe("skill scripts", () => {
     expect(reference).toMatch(/^PLAN-/);
     const syncedMarkdown = await readFile(planPath, "utf8");
     expect(parsePlanMarkdown(syncedMarkdown).reference).toBe(reference);
+    expect(syncedMarkdown).toContain("## **COMP-1 - Data management strategy**");
+    expect(syncedMarkdown).toContain("#### Requirement 1.A - Code example");
     expect(syncedMarkdown).toContain(formattedDetails);
     expect(repository.get(reference)?.components[0]?.requirements[0]?.details).toBe(formattedDetails);
     expect(repository.list()).toHaveLength(1);

@@ -21,7 +21,9 @@ describe("REST API", () => {
     resources.push({ app, repository });
     const upload = await app.inject({ method: "PUT", url: "/plans", headers: { "content-type": "text/markdown" }, payload: formatPlanMarkdown(samplePlan) });
     expect(upload.statusCode).toBe(200);
-    const reference = upload.json<{ reference: string }>().reference;
+    const uploadBody = upload.json<{ reference: string; validationFailures: { ordering: unknown[] } }>();
+    const reference = uploadBody.reference;
+    expect(uploadBody.validationFailures).toEqual({ ordering: [] });
 
     const list = await app.inject({ method: "GET", url: "/plans" });
     expect(list.json()).toMatchObject({ plans: [{ reference, title: samplePlan.title }] });
@@ -32,8 +34,37 @@ describe("REST API", () => {
 
     const updated = { ...samplePlan, reference, title: "Updated analytics" };
     const update = await app.inject({ method: "PUT", url: "/plans", headers: { "content-type": "text/markdown" }, payload: formatPlanMarkdown(updated) });
-    expect(update.json()).toEqual({ reference });
+    expect(update.json()).toEqual({ reference, validationFailures: { ordering: [] } });
     expect(repository.get(reference)?.title).toBe("Updated analytics");
+  });
+
+  it("persists renumbered Markdown and reports unresolved references", async () => {
+    const repository = new PlanRepository(":memory:");
+    const app = createServer({ repository });
+    resources.push({ app, repository });
+    const plan = {
+      ...samplePlan,
+      components: [{
+        ...samplePlan.components[0]!,
+        ref: "COMP-4",
+        requirements: [{ ref: "4.A", title: "Requirement 4.A", details: "See requirement 4.A and potato 8.Z." }],
+      }],
+      actionItems: [],
+    };
+
+    const upload = await app.inject({ method: "PUT", url: "/plans", headers: { "content-type": "text/markdown" }, payload: formatPlanMarkdown(plan) });
+    expect(upload.statusCode).toBe(200);
+    expect(upload.json()).toMatchObject({
+      validationFailures: { ordering: [{ section: "Requirement 1.A", failure: "potato 8.Z" }] },
+    });
+    const reference = upload.json<{ reference: string }>().reference;
+    const stored = repository.get(reference)!;
+    expect(stored.components[0]?.ref).toBe("COMP-1");
+    expect(stored.components[0]?.requirements[0]).toMatchObject({ ref: "1.A", details: "See requirement 1.A and potato 8.Z." });
+
+    const download = await app.inject({ method: "GET", url: `/plans/${reference}` });
+    expect(download.body).toContain("## **COMP-1 -");
+    expect(download.body).toContain("See requirement 1.A and potato 8.Z.");
   });
 
   it("returns useful client errors", async () => {

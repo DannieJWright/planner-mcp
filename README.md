@@ -72,12 +72,14 @@ Example local use in opencode.json/opencode.jsonc
 | Method | Endpoint | Behavior |
 |---|---|---|
 | `GET` | `/health` | Readiness response |
-| `PUT` | `/plans` | Parse and add/update a Markdown plan; returns `{ "reference": "..." }` |
+| `PUT` | `/plans` | Parse, normalize, and add/update a Markdown plan; returns its reference and ordering validation failures |
 | `GET` | `/plans` | List plan frontmatter metadata |
 | `GET` | `/plans/:reference` | Reconstruct canonical Markdown |
 | `DELETE` | `/plans/:reference` | Delete a plan and all associated sections |
 
 `PUT /plans` requires `Content-Type: text/markdown`. A frontmatter reference of `New` creates a UUID-backed `PLAN-...` reference. Any other reference updates that plan transactionally.
+
+The upload response has the shape `{ "reference": "...", "validationFailures": { "ordering": [] } }`. Ordering failures identify unresolved reference-like text by its normalized containing section; unresolved text is preserved in the saved plan.
 
 ## Direct Plan Transfer
 

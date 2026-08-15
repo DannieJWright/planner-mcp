@@ -23,6 +23,150 @@ const sections = [
   "Open Questions",
 ] as const;
 
+type ComponentItemKey = "requirements" | "constraints" | "decisions" | "knowledgeGaps" | "notes" | "questions";
+
+const referenceTypes: Array<{
+  key: ComponentItemKey;
+  label: string;
+  aliases: string[];
+}> = [
+  { key: "requirements", label: "Requirement", aliases: ["requirements?", "reqs?", "r"] },
+  { key: "constraints", label: "Constraint", aliases: ["constraints?", "cons?", "c"] },
+  { key: "decisions", label: "Decision", aliases: ["decisions?", "decs?", "d"] },
+  { key: "knowledgeGaps", label: "Knowledge Gap", aliases: ["knowledge\\s+gaps?", "k\\.?g\\.?", "findings?", "f"] },
+  { key: "notes", label: "Note", aliases: ["notes?", "n"] },
+  { key: "questions", label: "Question", aliases: ["(?:open\\s+)?questions?", "qs?", "q"] },
+];
+
+export type OrderingValidationFailure = {
+  section: string;
+  failure: string;
+};
+
+export type PlanValidationFailures = {
+  ordering: OrderingValidationFailure[];
+};
+
+export type PlanIngestResult = {
+  plan: Plan;
+  validationFailures: PlanValidationFailures;
+};
+
+function subsectionLabel(index: number): string {
+  let length = 1;
+  let offset = index;
+  let blockSize = 26;
+  while (offset >= blockSize) {
+    offset -= blockSize;
+    length += 1;
+    blockSize *= 26;
+  }
+  const letters = Array<string>(length);
+  for (let position = length - 1; position >= 0; position -= 1) {
+    letters[position] = String.fromCharCode(65 + (offset % 26));
+    offset = Math.floor(offset / 26);
+  }
+  return letters.join(".");
+}
+
+function referenceKey(value: string): string {
+  return value.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function normalizePlan(plan: Plan): PlanIngestResult {
+  const mappings = new Map<string, string>();
+  const componentNumbers = new Map<string, string>();
+
+  plan.components.forEach((component, componentIndex) => {
+    const componentNumber = componentIndex + 1;
+    const newComponentRef = `COMP-${componentNumber}`;
+    const oldNumber = component.ref.slice("COMP-".length);
+    componentNumbers.set(oldNumber, String(componentNumber));
+    component.ref = newComponentRef;
+
+    for (const type of referenceTypes) {
+      component[type.key].forEach((item, itemIndex) => {
+        const oldRef = item.ref;
+        const newRef = `${componentNumber}.${subsectionLabel(itemIndex)}`;
+        mappings.set(`${type.key}:${referenceKey(oldRef)}`, newRef);
+        item.ref = newRef;
+      });
+    }
+  });
+
+  const componentPattern = /\b(COMP(?:ONENT)?S?)(\s*(?:[-.#]\s*|\s+))(\d+)(?![\w]|\.\d)/gi;
+  const typedPatterns = referenceTypes.map((type) => ({
+    ...type,
+    pattern: new RegExp(`\\b(${type.aliases.join("|")})(\\s+|\\.\\s*)(\\d+(?:\\.[A-Za-z]+)+)`, "gi"),
+  }));
+  const genericPattern = /\b([A-Za-z][A-Za-z.]*)(\s+)(\d+(?:\.[A-Za-z]+)+)/g;
+  const failures: OrderingValidationFailure[] = [];
+
+  const rewrite = (value: string, section: string): string => {
+    const unresolved: Array<{ start: number; end: number; failure: string }> = [];
+    let rewritten = value.replace(componentPattern, (match, label: string, separator: string, number: string, offset: number) => {
+      const replacement = componentNumbers.get(number);
+      if (replacement) return `${label}${separator}${replacement}`;
+      unresolved.push({ start: offset, end: offset + match.length, failure: match });
+      return match;
+    });
+
+    for (const type of typedPatterns) {
+      rewritten = rewritten.replace(type.pattern, (match, alias: string, separator: string, ref: string, offset: number) => {
+        const replacement = mappings.get(`${type.key}:${referenceKey(ref)}`);
+        if (replacement) return `${alias}${separator}${replacement}`;
+        unresolved.push({ start: offset, end: offset + match.length, failure: match });
+        return match;
+      });
+    }
+
+    for (const match of rewritten.matchAll(genericPattern)) {
+      const failure = match[0];
+      if (!failure) continue;
+      const context = rewritten.slice(Math.max(0, match.index - 40), match.index + failure.length);
+      const isKnownSuffix = typedPatterns.some((type) => new RegExp(`(?:${type.aliases.join("|")})(?:\\s+|\\.\\s*)\\d+(?:\\.[A-Za-z]+)+$`, "i").test(context))
+        || /Acceptance\s+Criteria\s+\d+(?:\.[A-Za-z]+)+$/i.test(context);
+      if (isKnownSuffix) continue;
+      unresolved.push({ start: match.index, end: match.index + failure.length, failure });
+    }
+    unresolved.sort((left, right) => left.start - right.start);
+    for (const failure of unresolved) failures.push({ section, failure: failure.failure });
+    return rewritten;
+  };
+
+  plan.title = rewrite(plan.title, "Plan");
+  plan.description = rewrite(plan.description, "Plan");
+  plan.tags = plan.tags.map((tag) => rewrite(tag, "Plan"));
+  for (const component of plan.components) {
+    component.title = rewrite(component.title, component.ref);
+    component.description = rewrite(component.description, component.ref);
+    for (const type of referenceTypes) {
+      for (const item of component[type.key]) {
+        const section = `${type.label} ${item.ref}`;
+        item.title = rewrite(item.title, section);
+        item.details = rewrite(item.details, section);
+        if ("findings" in item) item.findings = rewrite(item.findings, section);
+      }
+    }
+  }
+  for (const action of plan.actionItems) {
+    action.title = rewrite(action.title, action.ref);
+    action.context = rewrite(action.context, action.ref);
+    for (const criterion of action.acceptanceCriteria) {
+      const section = `Acceptance Criteria ${criterion.ref}`;
+      criterion.title = rewrite(criterion.title, section);
+      criterion.details = rewrite(criterion.details, section);
+    }
+    for (const source of action.triggerSources) {
+      source.ref = rewrite(source.ref, action.ref);
+      source.title = rewrite(source.title, action.ref);
+    }
+    action.assignees = action.assignees.map((assignee) => rewrite(assignee, action.ref));
+  }
+
+  return { plan, validationFailures: { ordering: failures } };
+}
+
 function nodeText(node: Node): string {
   if (typeof node.value === "string") return node.value;
   return (node.children ?? []).map(nodeText).join("");
@@ -195,7 +339,7 @@ function parseActionItem(markdown: string, nodes: Node[], start: number, end: nu
   };
 }
 
-export function parsePlanMarkdown(markdown: string): Plan {
+export function ingestPlanMarkdown(markdown: string): PlanIngestResult {
   const parsed = matter(markdown);
   const tree = fromMarkdown(parsed.content) as Node;
   const nodes = tree.children ?? [];
@@ -239,7 +383,11 @@ export function parsePlanMarkdown(markdown: string): Plan {
     });
     throw new Error(`Plan Markdown error: invalid or missing document fields: ${issues.join("; ")}.`);
   }
-  return result.data;
+  return normalizePlan(result.data);
+}
+
+export function parsePlanMarkdown(markdown: string): Plan {
+  return ingestPlanMarkdown(markdown).plan;
 }
 
 function renderItems(title: typeof sections[number], items: Array<TextItem | StatusItem>, label: string): string {
