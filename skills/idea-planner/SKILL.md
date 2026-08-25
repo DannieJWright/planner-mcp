@@ -28,6 +28,7 @@ Derive `<human-readable-topic-summary>` from a short summary of the topic title 
 - Do not explore, search, list, or inspect the active workspace unless the user explicitly permits it.
 - Do not read references, follow links, fetch URLs, inspect attachments, or open user-mentioned files unless the user explicitly permits that specific reading.
 - Treat the user's message as the complete source during Phase 0.
+- These boundaries apply in full during Phases 0-2. In Phase 3, the user may explicitly widen the access scope after being asked; do not exceed what is granted.
 - Preserve explicitly declared concepts as separate components.
 - Preserve user-provided examples and detailed material verbatim as specified in `Verbatim user material` below.
 - Never proceed between phases without explicit user permission.
@@ -304,7 +305,30 @@ Enter only when the user expressly asks to proceed.
 
 Enter only after explicit permission.
 
-Run (`SYNC_SCRIPT`) with (`PLAN_FILE`). It uploads the complete document, receives its reference, downloads canonical Markdown, and atomically overwrites the same file. Do not manually duplicate, parse, or rewrite plan content. Report the returned reference and stop.
+Run (`SYNC_SCRIPT`) with (`PLAN_FILE`). It uploads the complete document, receives its reference, downloads canonical Markdown, and atomically overwrites the same file. Do not manually duplicate, parse, or rewrite plan content. Report the returned reference and stop. Phase 3 may follow only with explicit permission.
+
+```sh
+"<SYNC_SCRIPT>" "<PLAN_FILE>"
+```
+
+## Phase 3 - Interview Phase
+
+Enter only when the user expressly asks to proceed. This phase refines a plan that has
+already been ingested, then re-ingests it.
+
+The purpose is to resolve ambiguity, establish details about requirements and constraints,
+and prepare the plan for conversion into an implementation plan. The purpose is not to
+establish exact expected code, only to refine the plan into a detailed format that clearly
+describes the expected work to be completed.
+
+1. Ask the user what access scope may be used for this phase before asking anything else. Offer at minimum: no access beyond the plan file, specific files or paths the user names, or the workspace. Record the granted scope and do not exceed it. Absent an explicit grant, the Non-Negotiable Boundaries continue to apply in full.
+2. Re-read (`PLAN_FILE`). This is explicit permission to read that plan file only, unless the user granted a wider scope in step 1.
+3. Identify ambiguity, undefined behavior, unstated limits, unresolved alternatives, and details an implementer would have to invent.
+4. Ask the user batched, structured multiple-choice questions. Every question offers concrete options and permits a custom answer. Do not ask open-ended questions in bulk, and do not lead the user toward a preferred option.
+5. Incorporate each answer into the plan as a Requirement, Constraint, or Decision, using the classification boundaries defined above. A selected alternative is a Decided Decision. The full classification rationale reporting required by Phase 0 and Phase 1 is not required in this phase.
+6. Repeat steps 3 through 5 for as many rounds as needed. Continue until no ambiguity remains and the user confirms satisfaction.
+7. Stop and wait for explicit permission to re-ingest.
+8. On permission, run (`SYNC_SCRIPT`) with (`PLAN_FILE`), report the returned reference, and stop.
 
 ```sh
 "<SYNC_SCRIPT>" "<PLAN_FILE>"
@@ -425,3 +449,9 @@ List every affected triggering component or component item by canonical referenc
 - Inventing action items or omitting the empty `# Action Items` heading.
 - Filling stub sections with invented content.
 - Continuing into refinement, research, ingestion, or implementation without the corresponding explicit phase permission.
+- Entering the interview phase without explicit permission.
+- Exploring the workspace during the interview phase without asking for and receiving an access-scope grant.
+- Asking open-ended questions instead of structured multiple-choice questions during the interview phase.
+- Stopping after one interview round instead of continuing until the user is satisfied.
+- Re-ingesting after the interview without explicit permission.
+- Recording interview answers as Notes instead of Requirements, Constraints, or Decisions.

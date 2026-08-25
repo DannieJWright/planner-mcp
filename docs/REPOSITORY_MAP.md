@@ -23,7 +23,7 @@ The MCP server must write protocol traffic only to stdio through the SDK. Diagno
 
 ### `skills/idea-planner`
 
-- `SKILL.md`: phase-gated user thought organization workflow.
+- `SKILL.md`: phase-gated workflow: decomposition, user refinement, ingest, then an explicit-permission interview that refines and re-ingests the plan.
 - `scripts/upload-plan.sh`: streams a Markdown file to the API.
 - `scripts/download-plan.sh`: atomically downloads canonical Markdown.
 - `scripts/sync-plan.sh`: composes upload and download while printing the reference.

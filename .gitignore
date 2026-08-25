@@ -9,3 +9,5 @@ coverage/
 tmp/
 dump.md
 .worktrees/
+prompts.jsonl
+prompts.jsonl.outputs.json

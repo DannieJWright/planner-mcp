@@ -8,7 +8,7 @@ A TypeScript monorepo for turning planning documents into structured SQLite data
 |---|---|
 | `packages/api` | Markdown parser/formatter, domain types, SQLite repository, and REST API |
 | `packages/mcp` | MCP stdio server and REST API client |
-| `skills/idea-planner` | Phase-gated brain-dump planning skill and direct transfer scripts |
+| `skills/idea-planner` | Phase-gated planning skill: decomposition, user refinement, ingest, and interview; includes direct transfer scripts |
 | `docs/REPOSITORY_MAP.md` | Detailed ownership, data flow, and extension map |
 | `AGENTS.md` | Working rules and verification guidance for coding agents |
 
