@@ -65,6 +65,7 @@ export const planSchema = z.object({
 
 export type TextItem = z.infer<typeof textItemSchema>;
 export type StatusItem = z.infer<typeof statusItemSchema>;
+export type Decision = z.infer<typeof decisionSchema>;
 export type KnowledgeGap = z.infer<typeof knowledgeGapSchema>;
 export type ActionItem = z.infer<typeof actionItemSchema>;
 export type Component = z.infer<typeof componentSchema>;

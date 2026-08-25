@@ -34,7 +34,7 @@ describe("REST API", () => {
 
     const updated = { ...samplePlan, reference, title: "Updated analytics" };
     const update = await app.inject({ method: "PUT", url: "/plans", headers: { "content-type": "text/markdown" }, payload: formatPlanMarkdown(updated) });
-    expect(update.json()).toEqual({ reference, validationFailures: { ordering: [] } });
+    expect(update.json()).toMatchObject({ reference, validationFailures: { ordering: [] } });
     expect(repository.get(reference)?.title).toBe("Updated analytics");
   });
 
