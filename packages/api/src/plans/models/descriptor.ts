@@ -25,6 +25,8 @@ export type ParseContext = {
   source: string;
   nodes: MarkdownNode[];
   mode: ParseMode;
+  /** Every singular item label a `####` heading may begin with. */
+  labels: string[];
 };
 
 /**
@@ -84,6 +86,14 @@ export type HeadingItemsSection<Key extends string = string> = {
   /** Heading depth of the section itself and of its items. */
   sectionDepth: number;
   itemDepth: number;
+  /** Whether the section heading is wrapped in Markdown bold markers. */
+  headingBold: boolean;
+  /**
+   * Whether a section with no items collapses its trailing blank line. Component
+   * sections have always collapsed; action-item sections have always preserved it.
+   * The flag exists to keep canonical output byte-identical.
+   */
+  trimSectionBody: boolean;
   /** Nested prose subsections belonging to each item, e.g. Findings. */
   subsections: ProseSection[];
   /** Metadata fields accepted on an item in a partial document. */
@@ -100,6 +110,8 @@ export type BulletListSection<Key extends string = string> = {
   heading: string;
   required: boolean;
   sectionDepth: number;
+  headingBold: boolean;
+  trimSectionBody: boolean;
   /** Human-readable name used in bullet parse errors, e.g. `trigger source`. */
   entryLabel: string;
   /** Expected bullet shape shown in parse errors. */
@@ -147,6 +159,8 @@ export type NodeDescriptor = {
   placeholderRef: string;
   /** Depth of the node's own heading. */
   headingDepth: number;
+  /** Whether the node heading is wrapped in Markdown bold markers. */
+  headingBold: boolean;
   /** `# <heading>` grouping this node type, when it has one. */
   containerHeading: string | null;
   /** Allowed status values, or `null` when the node carries no status. */

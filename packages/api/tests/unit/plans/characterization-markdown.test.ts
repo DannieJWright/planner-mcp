@@ -193,9 +193,11 @@ describe("characterization: rejected documents", () => {
       message: "ACTION-1 is missing required `### Assignees` subsection.",
     },
     {
+      // Action-item status errors are now generated from the descriptor, so they read
+      // the same as every other status error instead of enumerating values inline.
       name: "action item with an invalid status",
       mutate: (source) => source.replace("## **ACTION-1 - Validate peak capacity**\n\n**Status:** TODO", "## **ACTION-1 - Validate peak capacity**\n\n**Status:** Pending"),
-      message: "ACTION-1 has a missing or invalid status. Allowed values are TODO, In Progress, Done, and Closed.",
+      message: "ACTION-1 has invalid status `Pending`. Add `**Status:** TODO` immediately below the heading; allowed values are TODO, In Progress, Done, Closed.",
     },
     {
       name: "malformed trigger source",
@@ -249,5 +251,39 @@ describe("characterization: silently tolerated input (quirks)", () => {
   it("accepts an unbolded status line", () => {
     const source = golden.replace("#### Decision 1.A\n\n**Status:** Open", "#### Decision 1.A\n\nStatus: Open");
     expect(parsePlanMarkdown(source).components[0]!.decisions[0]!.status).toBe("Open");
+  });
+});
+
+describe("item boundary rules", () => {
+  it("accepts any item label inside a section without nested subsections", () => {
+    const source = golden.replace(
+      "#### Requirement 1.A\n\nUploads must accept",
+      "#### Note 1.A - Borrowed label\n\nBody.\n\n#### Requirement 1.B\n\nUploads must accept",
+    );
+    const requirements = parsePlanMarkdown(source).components[0]!.requirements;
+    expect(requirements).toHaveLength(4);
+    expect(requirements[0]!.title).toBe("Borrowed label");
+  });
+
+  it("does not let a foreign item heading split a knowledge gap from its Findings", () => {
+    // Knowledge gaps own a nested `##### Findings` subsection, so their item boundaries
+    // are found by label. A stray same-depth heading must not truncate the gap.
+    const source = golden.replace(
+      "The persistence layer was a black box.\n\n##### Findings",
+      "The persistence layer was a black box.\n\n#### Note 9.Z - stray\n\n##### Findings",
+    );
+    const gap = parsePlanMarkdown(source).components[0]!.knowledgeGaps[1]!;
+    expect(gap.status).toBe("Resolved");
+    expect(gap.findings).toContain("The repository owns every direct database access.");
+  });
+
+  it("still rejects a nested Finding item heading inside the Findings prose", () => {
+    const source = golden.replace(
+      "##### Findings\n\nThe repository owns",
+      "##### Findings\n\n###### Finding 1.A - nested\n\nThe repository owns",
+    );
+    expect(() => parsePlanMarkdown(source)).toThrow(
+      "Findings must be direct content under `##### Findings`; remove the separate `Finding 1.A - nested` heading.",
+    );
   });
 });

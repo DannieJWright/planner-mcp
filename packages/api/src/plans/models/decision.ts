@@ -41,6 +41,8 @@ export const decisionsSection = {
   required: true,
   sectionDepth: 3,
   itemDepth: 4,
+  headingBold: true,
+  trimSectionBody: true,
   subsections: [],
   patchFields: ["Status", "Delete", "Handle"],
   model: decisionModel,

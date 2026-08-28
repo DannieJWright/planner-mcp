@@ -75,6 +75,8 @@ export const knowledgeGapsSection = {
   required: true,
   sectionDepth: 3,
   itemDepth: 4,
+  headingBold: true,
+  trimSectionBody: true,
   subsections: [findingsSection],
   patchFields: ["Status", "Delete", "Handle"],
   model: knowledgeGapModel,

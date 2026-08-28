@@ -48,6 +48,8 @@ export type TextSectionOptions<Key extends string> = {
   required?: boolean;
   sectionDepth?: number;
   itemDepth?: number;
+  headingBold?: boolean;
+  trimSectionBody?: boolean;
   detailsTransform?: HeadingItemsSection["detailsTransform"];
   patchFields?: readonly string[];
 };
@@ -66,6 +68,8 @@ export function textSection<Key extends string>(options: TextSectionOptions<Key>
     required: options.required ?? true,
     sectionDepth: options.sectionDepth ?? 3,
     itemDepth: options.itemDepth ?? 4,
+    headingBold: options.headingBold ?? true,
+    trimSectionBody: options.trimSectionBody ?? true,
     subsections: [],
     patchFields: options.patchFields ?? ["Status", "Delete", "Handle"],
     model: textItemModel,
