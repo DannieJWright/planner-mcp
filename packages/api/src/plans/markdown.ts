@@ -1,10 +1,11 @@
 /**
- * Plan Markdown codec.
+ * Plan Markdown codec entry point.
  *
- * Parsing and formatting are defined per model under `./models/`: the plan model owns
- * the document, delegates each component and action item to its own model, and each of
- * those delegates its sections to the shared section walker. This module is the public
- * entry point plus reference normalization and the items-only excerpt renderer.
+ * All parsing, formatting, and normalization is defined per model under `./models/`:
+ * the plan model owns the document, delegates each component and action item to its own
+ * model, and those delegate their sections to the shared section walker. This module
+ * only exposes the public entry points, the items-only excerpt renderer, and
+ * compatibility projections for callers that predate the registry.
  */
 import {
   contentBetween,
@@ -14,12 +15,11 @@ import {
   parseMarkdownNodes,
   type MarkdownNode,
 } from "./shared/ast.js";
-import { compareItemRefs, referenceKey, subsectionLabel } from "./shared/refs.js";
+import { compareItemRefs, subsectionLabel } from "./shared/refs.js";
 import { componentItemSections } from "./models/component.js";
 import { findingsSection } from "./models/knowledgeGap.js";
 import { formatPlanDocument, itemLabels, parsePlanDocument } from "./models/plan.js";
-import { acceptanceCriteriaSection } from "./models/actionItem.js";
-import { referenceSections, suppressedReferenceSections } from "./models/registry.js";
+import { normalizePlan, type OrderingValidationFailure, type PlanIngestResult, type PlanValidationFailures } from "./models/normalize.js";
 import { itemHeadingPattern, parseItemHeading as parseItemHeadingWithLabels } from "./models/section.js";
 import type { Plan, StatusItem, TextItem, KnowledgeGap } from "./domain.js";
 
@@ -42,132 +42,12 @@ export const componentSections: Array<{
   section: section.heading,
 }));
 
-export type OrderingValidationFailure = {
-  section: string;
-  failure: string;
-};
-
-export type PlanValidationFailures = {
-  ordering: OrderingValidationFailure[];
-};
-
-export type PlanIngestResult = {
-  plan: Plan;
-  validationFailures: PlanValidationFailures;
-};
+export { normalizePlan };
+export type { OrderingValidationFailure, PlanIngestResult, PlanValidationFailures };
 
 /** Parse a `#### <Label> <ref> - <title>` heading using the registry's label set. */
 export function parseItemHeading(heading: string): { ref: string; title?: string } | undefined {
   return parseItemHeadingWithLabels(heading, itemLabels);
-}
-
-/**
- * Renumber every component and item by document order and rewrite the references that
- * appear in prose.
- *
- * The set of reference-bearing sections, their aliases, and which of them merely
- * suppress false reports all come from the descriptor registry.
- */
-export function normalizePlan(plan: Plan): PlanIngestResult {
-  const mappings = new Map<string, string>();
-  const componentNumbers = new Map<string, string>();
-  const componentPrefix = "COMP-";
-
-  plan.components.forEach((component, componentIndex) => {
-    const componentNumber = componentIndex + 1;
-    const oldNumber = component.ref.slice(componentPrefix.length);
-    componentNumbers.set(oldNumber, String(componentNumber));
-    component.ref = `${componentPrefix}${componentNumber}`;
-
-    for (const section of referenceSections) {
-      const items = (component as unknown as Record<string, TextItem[]>)[section.key]!;
-      items.forEach((item, itemIndex) => {
-        const newRef = `${componentNumber}.${subsectionLabel(itemIndex)}`;
-        mappings.set(`${section.key}:${referenceKey(item.ref)}`, newRef);
-        item.ref = newRef;
-      });
-    }
-  });
-
-  const componentPattern = /\b(COMP(?:ONENT)?S?)(\s*(?:[-.#]\s*|\s+))(\d+)(?![\w]|\.\d)/gi;
-  const typedPatterns = referenceSections.map((section) => ({
-    key: section.key,
-    label: section.singularLabel,
-    aliases: section.aliases,
-    pattern: new RegExp(`\\b(${section.aliases.join("|")})(\\s+|\\.\\s*)(\\d+(?:\\.[A-Za-z]+)+)`, "gi"),
-  }));
-  const suppressedPatterns = suppressedReferenceSections.map(
-    (section) => new RegExp(`(?:${section.aliases.join("|")})\\s+\\d+(?:\\.[A-Za-z]+)+$`, "i"),
-  );
-  const genericPattern = /\b([A-Za-z][A-Za-z.]*)(\s+)(\d+(?:\.[A-Za-z]+)+)/g;
-  const failures: OrderingValidationFailure[] = [];
-
-  const rewrite = (value: string, section: string): string => {
-    const unresolved: Array<{ start: number; end: number; failure: string }> = [];
-    let rewritten = value.replace(componentPattern, (match, label: string, separator: string, number: string, offset: number) => {
-      const replacement = componentNumbers.get(number);
-      if (replacement) return `${label}${separator}${replacement}`;
-      unresolved.push({ start: offset, end: offset + match.length, failure: match });
-      return match;
-    });
-
-    for (const type of typedPatterns) {
-      rewritten = rewritten.replace(type.pattern, (match, alias: string, separator: string, ref: string, offset: number) => {
-        const replacement = mappings.get(`${type.key}:${referenceKey(ref)}`);
-        if (replacement) return `${alias}${separator}${replacement}`;
-        unresolved.push({ start: offset, end: offset + match.length, failure: match });
-        return match;
-      });
-    }
-
-    for (const match of rewritten.matchAll(genericPattern)) {
-      const failure = match[0];
-      if (!failure) continue;
-      const context = rewritten.slice(Math.max(0, match.index - 40), match.index + failure.length);
-      const isKnownSuffix = typedPatterns.some((type) => new RegExp(`(?:${type.aliases.join("|")})(?:\\s+|\\.\\s*)\\d+(?:\\.[A-Za-z]+)+$`, "i").test(context))
-        || suppressedPatterns.some((pattern) => pattern.test(context));
-      if (isKnownSuffix) continue;
-      unresolved.push({ start: match.index, end: match.index + failure.length, failure });
-    }
-    unresolved.sort((left, right) => left.start - right.start);
-    for (const failure of unresolved) failures.push({ section, failure: failure.failure });
-    return rewritten;
-  };
-
-  plan.title = rewrite(plan.title, "Plan");
-  plan.description = rewrite(plan.description, "Plan");
-  plan.tags = plan.tags.map((tag) => rewrite(tag, "Plan"));
-  for (const component of plan.components) {
-    component.title = rewrite(component.title, component.ref);
-    component.description = rewrite(component.description, component.ref);
-    for (const section of referenceSections) {
-      for (const item of (component as unknown as Record<string, TextItem[]>)[section.key]!) {
-        const context = `${section.singularLabel} ${item.ref}`;
-        item.title = rewrite(item.title, context);
-        item.details = rewrite(item.details, context);
-        const record = item as unknown as Record<string, string>;
-        if (findingsSection.key in record) {
-          record[findingsSection.key] = rewrite(record[findingsSection.key]!, context);
-        }
-      }
-    }
-  }
-  for (const action of plan.actionItems) {
-    action.title = rewrite(action.title, action.ref);
-    action.context = rewrite(action.context, action.ref);
-    for (const criterion of action.acceptanceCriteria) {
-      const context = `${acceptanceCriteriaSection.singularLabel} ${criterion.ref}`;
-      criterion.title = rewrite(criterion.title, context);
-      criterion.details = rewrite(criterion.details, context);
-    }
-    for (const source of action.triggerSources) {
-      source.ref = rewrite(source.ref, action.ref);
-      source.title = rewrite(source.title, action.ref);
-    }
-    action.assignees = action.assignees.map((assignee) => rewrite(assignee, action.ref));
-  }
-
-  return { plan, validationFailures: { ordering: failures } };
 }
 
 /** Parse, validate, and normalize a complete plan document. */
