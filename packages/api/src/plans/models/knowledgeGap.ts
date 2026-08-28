@@ -61,6 +61,23 @@ export const knowledgeGapModel: ItemModel = {
       item[findingsSection.key] as string,
     ].join("\n\n").trimEnd();
   },
+  toRow(item) {
+    return {
+      ref: item.ref as string,
+      title: item.title as string,
+      details: item.details as string,
+      status: item.status as string,
+    };
+  },
+  fromRow(row, subsections) {
+    return {
+      ref: row.ref,
+      title: row.title,
+      details: row.details,
+      status: row.status,
+      [findingsSection.key]: (subsections[findingsSection.key] ?? []).join("\n\n"),
+    };
+  },
 };
 
 export const knowledgeGapsSection = {

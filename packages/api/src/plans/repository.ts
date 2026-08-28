@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
-import { planSchema, type ActionItem, type Component, type Plan, type PlanSummary, type StatusItem, type TextItem } from "./domain.js";
+import { planSchema, type ActionItem, type Component, type Plan, type PlanSummary, type TextItem } from "./domain.js";
+import type { ItemRowValues } from "./models/descriptor.js";
+import { newPlanReference, planRefPrefix } from "./models/plan.js";
+import { componentItemSections } from "./models/component.js";
+import { persistedItemSections, sectionByDbKind } from "./models/registry.js";
 
 type PlanRow = {
   reference: string;
@@ -17,23 +21,7 @@ type ComponentRow = {
   description: string;
 };
 
-type ItemRow = {
-  id: number;
-  kind: string;
-  ref: string;
-  title: string;
-  details: string;
-  status: StatusItem["status"] | null;
-};
-
-const itemFields = {
-  requirement: "requirements",
-  constraint: "constraints",
-  decision: "decisions",
-  knowledge_gap: "knowledgeGaps",
-  note: "notes",
-  question: "questions",
-} as const;
+type ItemRow = ItemRowValues & { id: number; kind: string };
 
 export class PlanRepository {
   readonly database: DatabaseSync;
@@ -115,7 +103,7 @@ export class PlanRepository {
 
   save(planInput: Plan): string {
     const plan = planSchema.parse(planInput);
-    const reference = plan.reference === "New" ? `PLAN-${randomUUID()}` : plan.reference;
+    const reference = plan.reference === newPlanReference ? `${planRefPrefix}${randomUUID()}` : plan.reference;
     this.database.exec("BEGIN IMMEDIATE");
     try {
       this.database.prepare(`
@@ -138,25 +126,38 @@ export class PlanRepository {
         INSERT INTO items(component_id, kind, ref, title, details, status, position)
         VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
+      const insertFinding = this.database.prepare(`
+        INSERT INTO knowledge_gap_findings(knowledge_gap_id, ref, title, details, position)
+        VALUES (?, ?, ?, ?, ?)
+      `);
       plan.components.forEach((component, componentPosition) => {
         const result = insertComponent.run(reference, component.ref, component.title, component.description, componentPosition);
-        const groups: Array<[keyof typeof itemFields, Array<TextItem | StatusItem>]> = [
-          ["requirement", component.requirements],
-          ["constraint", component.constraints],
-          ["decision", component.decisions],
-          ["note", component.notes],
-          ["question", component.questions],
-        ];
-        groups.forEach(([kind, items]) => items.forEach((item, position) => {
-          insertItem.run(result.lastInsertRowid, kind, item.ref, item.title, item.details, "status" in item ? item.status : null, position);
-        }));
-        component.knowledgeGaps.forEach((gap, position) => {
-          const gapResult = insertItem.run(result.lastInsertRowid, "knowledge_gap", gap.ref, gap.title, gap.details, gap.status, position);
-          this.database.prepare(`
-            INSERT INTO knowledge_gap_findings(knowledge_gap_id, ref, title, details, position)
-            VALUES (?, ?, ?, ?, ?)
-          `).run(gapResult.lastInsertRowid, "findings", "Findings", gap.findings, 0);
-        });
+        const record = component as unknown as Record<string, Array<Record<string, unknown>>>;
+        for (const section of persistedItemSections) {
+          record[section.key]!.forEach((item, position) => {
+            const values = section.model.toRow(item);
+            const inserted = insertItem.run(
+              result.lastInsertRowid,
+              section.dbKind!,
+              values.ref,
+              values.title,
+              values.details,
+              values.status,
+              position,
+            );
+            // A nested prose subsection is stored as a single named row, so its
+            // heading text never has to be spelled here.
+            section.subsections.forEach((subsection, subsectionPosition) => {
+              insertFinding.run(
+                inserted.lastInsertRowid,
+                subsection.key,
+                subsection.heading,
+                (item[subsection.key] as string | undefined) ?? "",
+                subsectionPosition,
+              );
+            });
+          });
+        }
       });
       const insertAction = this.database.prepare(`
         INSERT INTO action_items(plan_reference, ref, title, status, context, position)
@@ -191,32 +192,39 @@ export class PlanRepository {
     const row = this.database.prepare("SELECT reference, title, description, tags, status FROM plans WHERE reference = ?").get(reference) as PlanRow | undefined;
     if (!row) return undefined;
     const componentRows = this.database.prepare("SELECT id, ref, title, description FROM components WHERE plan_reference = ? ORDER BY position").all(reference) as unknown as ComponentRow[];
+    const findingsStatement = this.database.prepare(
+      "SELECT ref, details FROM knowledge_gap_findings WHERE knowledge_gap_id = ? ORDER BY position",
+    );
     const components = componentRows.map((componentRow): Component => {
-      const component: Component = {
+      const record: Record<string, unknown> = {
         ref: componentRow.ref,
         title: componentRow.title,
         description: componentRow.description,
-        requirements: [],
-        constraints: [],
-        decisions: [],
-        knowledgeGaps: [],
-        notes: [],
-        questions: [],
       };
-      const items = this.database.prepare("SELECT id, kind, ref, title, details, status FROM items WHERE component_id = ? ORDER BY kind, position").all(componentRow.id) as unknown as ItemRow[];
+      for (const section of componentItemSections) record[section.key] = [];
+
+      const items = this.database
+        .prepare("SELECT id, kind, ref, title, details, status FROM items WHERE component_id = ? ORDER BY kind, position")
+        .all(componentRow.id) as unknown as ItemRow[];
       for (const item of items) {
-        const field = itemFields[item.kind as keyof typeof itemFields];
-        if (!field) throw new Error(`Unknown item kind in database: ${item.kind}`);
-        if (field === "knowledgeGaps") {
-          const findings = (this.database.prepare("SELECT details FROM knowledge_gap_findings WHERE knowledge_gap_id = ? ORDER BY position").all(item.id) as unknown as Array<{ details: string }>).map(({ details }) => details).join("\n\n");
-          component.knowledgeGaps.push({ ref: item.ref, title: item.title, details: item.details, status: item.status! as Component["knowledgeGaps"][number]["status"], findings });
-        } else if (field === "decisions") {
-          component[field].push({ ref: item.ref, title: item.title, details: item.details, status: item.status! as Component["decisions"][number]["status"] });
-        } else {
-          component[field].push({ ref: item.ref, title: item.title, details: item.details });
+        const section = sectionByDbKind(item.kind);
+        if (!section) throw new Error(`Unknown item kind in database: ${item.kind}`);
+        const subsections: Record<string, string[]> = {};
+        if (section.subsections.length > 0) {
+          for (const subsection of section.subsections) subsections[subsection.key] = [];
+          // Rows written before subsections were named carry an item-style ref such as
+          // `1.A.2`. They belong to the section's first subsection, which is what the
+          // pre-refactor reader assumed for every row it found.
+          const fallback = section.subsections[0]!.key;
+          const rows = findingsStatement.all(item.id) as unknown as Array<{ ref: string; details: string }>;
+          for (const row of rows) {
+            const key = section.subsections.some((subsection) => subsection.key === row.ref) ? row.ref : fallback;
+            subsections[key]!.push(row.details);
+          }
         }
+        (record[section.key] as unknown[]).push(section.model.fromRow(item, subsections));
       }
-      return component;
+      return record as unknown as Component;
     });
     const actionRows = this.database.prepare("SELECT id, ref, title, status, context FROM action_items WHERE plan_reference = ? ORDER BY position").all(reference) as unknown as Array<ActionItem & { id: number }>;
     const actionItems = actionRows.map((action): ActionItem => ({

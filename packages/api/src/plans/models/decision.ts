@@ -27,6 +27,17 @@ export const decisionModel: ItemModel = {
     const heading = itemHeading(section.itemDepth, section.singularLabel, item.ref as string, item.title as string);
     return `${heading}\n\n**Status:** ${item.status as string}\n\n${item.details as string}`.trimEnd();
   },
+  toRow(item) {
+    return {
+      ref: item.ref as string,
+      title: item.title as string,
+      details: item.details as string,
+      status: item.status as string,
+    };
+  },
+  fromRow(row) {
+    return { ref: row.ref, title: row.title, details: row.details, status: row.status };
+  },
 };
 
 export const decisionsSection = {

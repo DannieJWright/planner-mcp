@@ -137,6 +137,15 @@ export type ProseSection<Key extends string = string> = {
 
 export type SectionDescriptor = HeadingItemsSection | BulletListSection | ProseSection;
 
+/** Column values of a persisted item row, excluding identity and ordering columns. */
+export type ItemRowValues = {
+  ref: string;
+  title: string;
+  details: string;
+  /** `null` for item types that carry no status. */
+  status: string | null;
+};
+
 /** Contract every item model module implements. */
 export type ItemModel = {
   schema: z.ZodTypeAny;
@@ -144,6 +153,13 @@ export type ItemModel = {
   fromParsed: (parsed: ParsedItem, section: HeadingItemsSection) => Record<string, unknown>;
   /** Render one domain item, excluding the section heading. */
   format: (item: Record<string, unknown>, section: HeadingItemsSection) => string;
+  /** Project a domain item into its persisted column values. */
+  toRow: (item: Record<string, unknown>) => ItemRowValues;
+  /**
+   * Rebuild a domain item from its row and the bodies of its nested prose subsections,
+   * keyed by subsection key. Each key maps to the ordered rows stored for it.
+   */
+  fromRow: (row: ItemRowValues, subsections: Record<string, string[]>) => Record<string, unknown>;
 };
 
 /** A top-level document node: the plan itself, a component, or an action item. */

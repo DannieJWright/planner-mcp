@@ -36,6 +36,12 @@ export const textItemModel: ItemModel = {
     const details = section.detailsTransform ? section.detailsTransform.encode(raw) : raw;
     return `${itemHeading(section.itemDepth, section.singularLabel, ref, title)}\n\n${details}`.trimEnd();
   },
+  toRow(item) {
+    return { ref: item.ref as string, title: item.title as string, details: item.details as string, status: null };
+  },
+  fromRow(row) {
+    return { ref: row.ref, title: row.title, details: row.details };
+  },
 };
 
 export type TextSectionOptions<Key extends string> = {
