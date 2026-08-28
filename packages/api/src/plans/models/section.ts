@@ -20,6 +20,7 @@ import {
 } from "../shared/ast.js";
 import {
   duplicateNestedSubsection,
+  duplicateSubsection,
   headingLiteral,
   invalidBullet,
   invalidItemHeading,
@@ -27,6 +28,7 @@ import {
   missingSubsection,
   nestedItemInProse,
   resolvedWithEmptyProse,
+  unsupportedSubsection,
 } from "../shared/errors.js";
 import type {
   BulletListSection,
@@ -266,4 +268,43 @@ export function sectionIndexes(
 ): Array<{ heading: string; index: number }> {
   return headingIndexes(nodes, range.start, range.end, depth)
     .map((index) => ({ heading: headingText(nodes[index]!), index }));
+}
+
+/**
+ * Match the `###` headings inside a node against the sections it declares and return the
+ * node range covered by each.
+ *
+ * Unknown and duplicated headings are always rejected. Missing required sections are
+ * rejected only in strict mode, because a partial document is expected to omit anything
+ * it is not changing. This is the single implementation used by the strict parser and
+ * the patch parser alike.
+ */
+export function locateSections<T extends { heading: string; required: boolean }>(
+  ctx: ParseContext,
+  owner: string,
+  sections: readonly T[],
+  range: NodeRange,
+  depth: number,
+): Map<T, NodeRange> {
+  const found = new Map<T, number>();
+  for (const { heading, index } of sectionIndexes(ctx.nodes, { start: range.start + 1, end: range.end }, depth)) {
+    const section = sections.find((candidate) => candidate.heading === heading);
+    if (!section) throw unsupportedSubsection(ctx.nodes[index]!, owner, depth, heading);
+    if (found.has(section)) throw duplicateSubsection(ctx.nodes[index]!, owner, depth, heading);
+    found.set(section, index);
+  }
+  if (ctx.mode === "strict") {
+    for (const section of sections) {
+      if (section.required && !found.has(section)) {
+        throw missingSubsection(ctx.nodes[range.start], owner, depth, section.heading);
+      }
+    }
+  }
+
+  const boundaries = [...found.values()].sort((left, right) => left - right);
+  const ranges = new Map<T, NodeRange>();
+  for (const [section, start] of found) {
+    ranges.set(section, { start: start + 1, end: boundaries.find((value) => value > start) ?? range.end });
+  }
+  return ranges;
 }

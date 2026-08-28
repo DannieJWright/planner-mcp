@@ -8,14 +8,9 @@
 import { z } from "zod";
 import type { HeadingItemsSection, NodeDescriptor, NodeRange, ParseContext } from "./descriptor.js";
 import { contentBetween, headingText } from "../shared/ast.js";
-import {
-  duplicateSubsection,
-  invalidNodeHeading,
-  missingSubsection,
-  unsupportedSubsection,
-} from "../shared/errors.js";
+import { invalidNodeHeading } from "../shared/errors.js";
 import { canonicalRefPattern, placeholderRef, refHeadingPattern } from "../shared/refs.js";
-import { formatHeadingItems, parseHeadingItems, sectionIndexes } from "./section.js";
+import { formatHeadingItems, locateSections, parseHeadingItems } from "./section.js";
 import { decisionSchema, decisionsSection } from "./decision.js";
 import { knowledgeGapSchema, knowledgeGapsSection } from "./knowledgeGap.js";
 import { textItemSchema, textSection } from "./textItem.js";
@@ -63,7 +58,7 @@ export const questionsSection = textSection({
 });
 
 /** The six component item sections, in canonical document order. */
-export const componentItemSections: HeadingItemsSection[] = [
+export const componentItemSections: Array<HeadingItemsSection<ComponentItemKey>> = [
   requirementsSection,
   constraintsSection,
   decisionsSection,
@@ -90,6 +85,9 @@ export const componentSchema = z.object({
 });
 
 export type Component = z.infer<typeof componentSchema>;
+
+/** Model keys of the component's item collections, derived from the schema itself. */
+export type ComponentItemKey = Exclude<keyof Component, "ref" | "title" | "description">;
 
 export const componentDescriptor: NodeDescriptor = {
   key: "component",
@@ -127,25 +125,9 @@ export function parseComponent(ctx: ParseContext, range: NodeRange): Component {
   if (!match) throw invalidNodeHeading(node, componentDescriptor.label, heading, headingSyntax(allowPlaceholder));
   const ref = match[1]!;
 
-  const found = new Map<HeadingItemsSection, number>();
-  for (const { heading: name, index } of sectionIndexes(ctx.nodes, { start: range.start + 1, end: range.end }, 3)) {
-    const section = componentItemSections.find((candidate) => candidate.heading === name);
-    if (!section) throw unsupportedSubsection(ctx.nodes[index]!, ref, 3, name);
-    if (found.has(section)) throw duplicateSubsection(ctx.nodes[index]!, ref, 3, name);
-    found.set(section, index);
-  }
-  if (ctx.mode === "strict") {
-    for (const section of componentItemSections) {
-      if (section.required && !found.has(section)) throw missingSubsection(node, ref, 3, section.heading);
-    }
-  }
-
-  const boundaries = [...found.values()].sort((left, right) => left - right);
-  const rangeFor = (section: HeadingItemsSection): NodeRange => {
-    const start = found.get(section);
-    if (start === undefined) return { start: range.end, end: range.end };
-    return { start: start + 1, end: boundaries.find((value) => value > start) ?? range.end };
-  };
+  const found = locateSections(ctx, ref, componentItemSections, range, 3);
+  const rangeFor = (section: HeadingItemsSection<ComponentItemKey>): NodeRange =>
+    found.get(section) ?? { start: range.end, end: range.end };
 
   const component = {
     ref,

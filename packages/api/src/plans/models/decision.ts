@@ -46,4 +46,4 @@ export const decisionsSection = {
   subsections: [],
   patchFields: ["Status", "Delete", "Handle"],
   model: decisionModel,
-} satisfies HeadingItemsSection;
+} satisfies HeadingItemsSection<"decisions">;

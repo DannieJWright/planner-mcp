@@ -16,7 +16,7 @@ import {
   type MarkdownNode,
 } from "./shared/ast.js";
 import { compareItemRefs, subsectionLabel } from "./shared/refs.js";
-import { componentItemSections } from "./models/component.js";
+import { componentItemSections, type ComponentItemKey } from "./models/component.js";
 import { findingsSection } from "./models/knowledgeGap.js";
 import { formatPlanDocument, itemLabels, parsePlanDocument } from "./models/plan.js";
 import { normalizePlan, type OrderingValidationFailure, type PlanIngestResult, type PlanValidationFailures } from "./models/normalize.js";
@@ -26,7 +26,7 @@ import type { Plan, StatusItem, TextItem, KnowledgeGap } from "./domain.js";
 export { contentBetween, lineLocation, nodeText, parseLeadingMetadata, parseMarkdownNodes, type MarkdownNode };
 export { compareItemRefs, subsectionLabel };
 
-export type ComponentItemKey = "requirements" | "constraints" | "decisions" | "knowledgeGaps" | "notes" | "questions";
+export type { ComponentItemKey } from "./models/component.js";
 
 /**
  * Section heading, canonical item label, and model key for each component item

@@ -1,42 +1,45 @@
 import matter from "gray-matter";
-import {
-  actionItemStatuses,
-  decisionStatuses,
-  knowledgeGapStatuses,
-  planStatuses,
-  type ActionItem,
-  type Component,
-  type KnowledgeGap,
-  type Plan,
-  type TextItem,
-} from "./domain.js";
-import {
-  componentSections,
-  normalizePlan,
-  parseItemHeading,
-  type ComponentItemKey,
-  type PlanIngestResult,
-} from "./markdown.js";
+import { planStatuses, type ActionItem, type Component, type Plan, type TextItem } from "./domain.js";
+import { normalizePlan, type PlanIngestResult } from "./models/normalize.js";
+import { acceptanceCriteriaSection, actionItemDescriptor, actionItemSections } from "./models/actionItem.js";
+import { componentDescriptor, componentItemSections, type ComponentItemKey } from "./models/component.js";
+import { isBulletList, isHeadingItems, type HeadingItemsSection, type NodeRange, type ParseContext, type ParsedItem } from "./models/descriptor.js";
+import { createParseContext, planCollections, planPatchableFields } from "./models/plan.js";
+import { locateSections, parseBulletList, parseHeadingItems, resolveStatus } from "./models/section.js";
 import {
   contentBetween,
-  headingIndexes,
   headingText,
-  lineLocation,
   nextBoundary,
-  nodeText,
   parseLeadingMetadata,
-  parseMarkdownNodes,
+  type LeadingMetadata,
   type MarkdownNode,
 } from "./shared/ast.js";
-import { subsectionLabel } from "./shared/refs.js";
+import {
+  invalidBoolean,
+  invalidFrontmatterStatus,
+  invalidMetadataStatus,
+  invalidNodeHeading,
+  invalidPosition,
+  missingPersistedReference,
+  unsupportedBlockHeading,
+  unsupportedStatusField,
+} from "./shared/errors.js";
+import {
+  canonicalizeRef,
+  newNodePlaceholder,
+  refHeadingPattern,
+  refHeadingPrefix,
+  refNumber,
+  subsectionLabel,
+} from "./shared/refs.js";
 
 /* -------------------------------------------------------------------------- */
 /* Patch model                                                                */
 /* -------------------------------------------------------------------------- */
 
-export const newComponentRef = "COMP-New";
-export const newActionItemRef = "ACTION-New";
-export const newItemRef = "New";
+export const newComponentRef = componentDescriptor.placeholderRef;
+export const newActionItemRef = actionItemDescriptor.placeholderRef;
+export const newItemRef = newNodePlaceholder;
 
 export type ItemPatchValue = {
   title?: string;
@@ -126,7 +129,7 @@ export function identityProvenance(plan: Plan): PlanProvenance {
     components: plan.components.map((component) => ({
       originRef: component.ref,
       title: component.title,
-      items: Object.fromEntries(componentSections.map(({ key }) => [
+      items: Object.fromEntries(componentItemSections.map(({ key }) => [
         key,
         component[key].map((item) => ({ originRef: item.ref, title: item.title })),
       ])) as Record<ComponentItemKey, NodeProvenance[]>,
@@ -147,7 +150,7 @@ export function diffReferences(original: Plan, normalized: Plan, provenance: Pla
   const originalRefs = new Set<string>();
   for (const component of original.components) {
     originalRefs.add(`component:${component.ref}`);
-    for (const { key } of componentSections) {
+    for (const { key } of componentItemSections) {
       for (const item of component[key]) originalRefs.add(`${key}:${item.ref}`);
     }
   }
@@ -173,7 +176,7 @@ export function diffReferences(original: Plan, normalized: Plan, provenance: Pla
     const componentProvenance = provenance.components[index];
     if (!componentProvenance) throw new Error("Provenance is not aligned with the normalized plan components");
     visit("component", component.ref, componentProvenance);
-    for (const { key } of componentSections) {
+    for (const { key } of componentItemSections) {
       component[key].forEach((item, itemIndex) => {
         const itemProvenance = componentProvenance.items[key][itemIndex];
         if (!itemProvenance) throw new Error(`Provenance is not aligned with ${component.ref} ${key}`);
@@ -200,189 +203,157 @@ export function diffReferences(original: Plan, normalized: Plan, provenance: Pla
 /* Partial Markdown parsing                                                   */
 /* -------------------------------------------------------------------------- */
 
-const componentMetadataKeys = ["Delete", "Replace", "Position", "Handle"] as const;
-const itemMetadataKeys = ["Status", "Delete", "Handle"] as const;
-const actionMetadataKeys = ["Status", "Delete", "Position", "Handle"] as const;
-
 function parseBoolean(value: string, field: string, context: string): boolean {
   const normalized = value.trim().toLowerCase();
   if (["true", "yes", "1"].includes(normalized)) return true;
   if (["false", "no", "0"].includes(normalized)) return false;
-  throw new Error(`Plan Markdown error: ${context} has an invalid \`${field}\` value \`${value}\`. Expected \`true\` or \`false\`.`);
+  throw invalidBoolean(context, field, value);
 }
 
 function parsePosition(value: string, context: string): number {
   const parsed = Number(value.trim());
-  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) {
-    throw new Error(`Plan Markdown error: ${context} has an invalid \`Position\` value \`${value}\`. Expected a whole number.`);
-  }
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) throw invalidPosition(context, value);
   return parsed;
 }
 
-function parsePartialItems(content: string, nodes: MarkdownNode[], start: number, end: number, kind: ComponentItemKey): ItemPatch[] {
-  const section = componentSections.find((entry) => entry.key === kind)!;
-  const statuses = kind === "decisions" ? decisionStatuses : kind === "knowledgeGaps" ? knowledgeGapStatuses : undefined;
-  const starts = headingIndexes(nodes, start, end, 4);
-  return starts.map((itemStart, order) => {
-    const node = nodes[itemStart]!;
-    const heading = headingText(node);
-    const parsed = parseItemHeading(heading);
-    if (!parsed) {
-      throw new Error(`Plan Markdown error${lineLocation(node)}: invalid item heading \`${heading}\`. Expected \`#### <Item Type> <reference> - <title>\`, for example \`#### Requirement 1.A - Upload plans\`.`);
-    }
-    const itemEnd = starts[order + 1] ?? end;
-    const context = `${section.label} ${parsed.ref}`;
-    const findingsHeading = kind === "knowledgeGaps"
-      ? headingIndexes(nodes, itemStart + 1, itemEnd, 5).find((index) => headingText(nodes[index]!) === "Findings")
-      : undefined;
-    const bodyEnd = findingsHeading ?? itemEnd;
-    const body = contentBetween(content, nodes.slice(0, bodyEnd), itemStart + 1, 4);
-    const { fields, rest } = parseLeadingMetadata(body, itemMetadataKeys, context);
-
-    const value: ItemPatchValue = {};
-    if (parsed.title !== undefined) value.title = parsed.title;
-    if (rest) value.details = kind === "questions" ? rest.replace(/^>\s?/, "") : rest;
-    if (fields.Status !== undefined) {
-      if (!statuses) throw new Error(`Plan Markdown error${lineLocation(node)}: ${context} does not support a \`Status\` metadata field.`);
-      const status = statuses.find((candidate) => candidate.toLowerCase() === fields.Status!.toLowerCase());
-      if (!status) throw new Error(`Plan Markdown error${lineLocation(node)}: ${context} has invalid status \`${fields.Status}\`; allowed values are ${statuses.join(", ")}.`);
-      value.status = status;
-    }
-    if (findingsHeading !== undefined) {
-      value.findings = contentBetween(content, nodes.slice(0, itemEnd), findingsHeading + 1, 5);
-    }
-
-    const patch: ItemPatch = {
-      kind,
-      ref: parsed.ref,
-      delete: fields.Delete === undefined ? false : parseBoolean(fields.Delete, "Delete", context),
-      value,
-    };
-    if (fields.Handle !== undefined) patch.handle = fields.Handle;
-    return patch;
-  });
+/**
+ * Read the metadata block and description that precede a node's first `###` subsection.
+ *
+ * The allowed field names come from the node descriptor, so a node type's patch
+ * vocabulary is declared in exactly one place.
+ */
+function readNodePreamble(
+  ctx: ParseContext,
+  range: NodeRange,
+  fields: readonly string[],
+  context: string,
+): LeadingMetadata {
+  const boundary = nextBoundary(ctx.nodes, range.start + 1, range.end, 3);
+  const body = contentBetween(ctx.source, ctx.nodes.slice(0, boundary), range.start + 1, 3);
+  return parseLeadingMetadata(body, fields, context);
 }
 
-function parsePartialComponent(content: string, nodes: MarkdownNode[], start: number, end: number): ComponentPatch {
-  const node = nodes[start]!;
-  const heading = headingText(node);
-  const match = heading.match(/^(COMP-(?:\d+|New))\s*-\s*(.+)$/i);
-  if (!match) throw new Error(`Plan Markdown error${lineLocation(node)}: invalid component heading \`${heading}\`. Expected \`## **COMP-<number|New> - <title>**\`.`);
-  const ref = match[1]!.replace(/^comp-/i, "COMP-").replace(/new$/i, "New");
-  const context = ref;
-
-  const sectionIndexes = new Map<ComponentItemKey, number>();
-  for (const index of headingIndexes(nodes, start + 1, end, 3)) {
-    const name = headingText(nodes[index]!);
-    const section = componentSections.find((entry) => entry.section === name);
-    if (!section) throw new Error(`Plan Markdown error${lineLocation(nodes[index]!)}: ${ref} contains unsupported \`### ${name}\` subsection.`);
-    if (sectionIndexes.has(section.key)) throw new Error(`Plan Markdown error${lineLocation(nodes[index]!)}: ${ref} contains duplicate \`### ${name}\` subsections.`);
-    sectionIndexes.set(section.key, index);
+/**
+ * Project a parsed item into a patch operation.
+ *
+ * The traversal itself is the same one the strict parser uses; only this projection
+ * differs, because a partial document describes a change rather than a complete item.
+ */
+function toItemPatch(parsed: ParsedItem, section: HeadingItemsSection): ItemPatch {
+  const context = `${section.singularLabel} ${parsed.ref}`;
+  const value: ItemPatchValue = {};
+  if (parsed.title !== undefined) value.title = parsed.title;
+  if (parsed.details) {
+    value.details = section.detailsTransform ? section.detailsTransform.decode(parsed.details) : parsed.details;
+  }
+  if (parsed.metadata.Status !== undefined) {
+    if (section.statuses === null) throw unsupportedStatusField(parsed.node, context);
+    const status = resolveStatus(section.statuses, parsed.metadata.Status);
+    if (!status) throw invalidMetadataStatus(parsed.node, context, parsed.metadata.Status, section.statuses);
+    value.status = status;
+  }
+  for (const subsection of section.subsections) {
+    if (!parsed.presentSubsections.has(subsection.key)) continue;
+    (value as Record<string, unknown>)[subsection.key] = parsed.subsections[subsection.key];
   }
 
-  const preamble = contentBetween(content, nodes.slice(0, nextBoundary(nodes, start + 1, end, 3)), start + 1, 3);
-  const { fields, rest } = parseLeadingMetadata(preamble, componentMetadataKeys, context);
-
-  const ordered = [...sectionIndexes.entries()].sort((left, right) => left[1] - right[1]);
-  const items = ordered.flatMap(([kind, sectionStart], order) => {
-    const sectionEnd = ordered[order + 1]?.[1] ?? end;
-    return parsePartialItems(content, nodes, sectionStart + 1, sectionEnd, kind);
-  });
-
-  const patch: ComponentPatch = {
-    ref,
-    delete: fields.Delete === undefined ? false : parseBoolean(fields.Delete, "Delete", context),
-    replaceChildren: fields.Replace === undefined ? false : parseBoolean(fields.Replace, "Replace", context),
-    title: match[2]!.trim(),
-    items,
+  const patch: ItemPatch = {
+    kind: section.key as ComponentItemKey,
+    ref: parsed.ref,
+    delete: parsed.metadata.Delete === undefined ? false : parseBoolean(parsed.metadata.Delete, "Delete", context),
+    value,
   };
-  if (rest) patch.description = rest;
-  if (fields.Position !== undefined) patch.position = parsePosition(fields.Position, context);
-  if (fields.Handle !== undefined) patch.handle = fields.Handle;
+  if (parsed.metadata.Handle !== undefined) patch.handle = parsed.metadata.Handle;
   return patch;
 }
 
-function parseBulletList(node: MarkdownNode | undefined): string[] {
-  if (node?.type !== "list") return [];
-  return (node.children ?? []).map((item) => nodeText(item).trim()).filter(Boolean);
+function parsePartialComponent(ctx: ParseContext, range: NodeRange): ComponentPatch {
+  const node = ctx.nodes[range.start]!;
+  const heading = headingText(node);
+  const match = heading.match(refHeadingPattern(componentDescriptor.refPrefix, true));
+  if (!match) {
+    throw invalidNodeHeading(node, componentDescriptor.label, heading, `## **${componentDescriptor.refPrefix}<number|New> - <title>**`);
+  }
+  const ref = canonicalizeRef(match[1]!, componentDescriptor.refPrefix);
+
+  const found = locateSections(ctx, ref, componentItemSections, range, 3);
+  const ordered = [...found.entries()].sort((left, right) => left[1].start - right[1].start);
+  const items = ordered.flatMap(([section, sectionRange]) =>
+    parseHeadingItems(ctx, section, sectionRange).map((item) => toItemPatch(item, section)));
+
+  const preamble = readNodePreamble(ctx, range, componentDescriptor.patchFields, ref);
+  const patch: ComponentPatch = {
+    ref,
+    delete: preamble.fields.Delete === undefined ? false : parseBoolean(preamble.fields.Delete, "Delete", ref),
+    replaceChildren: preamble.fields.Replace === undefined ? false : parseBoolean(preamble.fields.Replace, "Replace", ref),
+    title: match[2]!.trim(),
+    items,
+  };
+  if (preamble.rest) patch.description = preamble.rest;
+  if (preamble.fields.Position !== undefined) patch.position = parsePosition(preamble.fields.Position, ref);
+  if (preamble.fields.Handle !== undefined) patch.handle = preamble.fields.Handle;
+  return patch;
 }
 
-function parsePartialActionItem(content: string, nodes: MarkdownNode[], start: number, end: number): ActionItemPatch {
-  const node = nodes[start]!;
+function parsePartialActionItem(ctx: ParseContext, range: NodeRange): ActionItemPatch {
+  const node = ctx.nodes[range.start]!;
   const heading = headingText(node);
-  const match = heading.match(/^(ACTION-(?:\d+|New))\s*-\s*(.+)$/i);
-  if (!match) throw new Error(`Plan Markdown error${lineLocation(node)}: invalid action item heading \`${heading}\`. Expected \`## **ACTION-<number|New> - <title>**\`.`);
-  const ref = match[1]!.replace(/^action-/i, "ACTION-").replace(/new$/i, "New");
-  const context = ref;
-
-  const sectionIndexes = new Map<string, number>();
-  for (const index of headingIndexes(nodes, start + 1, end, 3)) {
-    const name = headingText(nodes[index]!);
-    if (!["Acceptance Criteria", "Trigger Sources", "Assignees"].includes(name)) {
-      throw new Error(`Plan Markdown error${lineLocation(nodes[index]!)}: ${ref} contains unsupported \`### ${name}\` subsection.`);
-    }
-    if (sectionIndexes.has(name)) throw new Error(`Plan Markdown error${lineLocation(nodes[index]!)}: ${ref} contains duplicate \`### ${name}\` subsections.`);
-    sectionIndexes.set(name, index);
+  const match = heading.match(refHeadingPattern(actionItemDescriptor.refPrefix, true));
+  if (!match) {
+    throw invalidNodeHeading(node, actionItemDescriptor.label, heading, `## **${actionItemDescriptor.refPrefix}<number|New> - <title>**`);
   }
-  const sectionEnd = (sectionStart: number): number => [...sectionIndexes.values()].filter((value) => value > sectionStart).sort((a, b) => a - b)[0] ?? end;
+  const ref = canonicalizeRef(match[1]!, actionItemDescriptor.refPrefix);
 
-  const preamble = contentBetween(content, nodes.slice(0, nextBoundary(nodes, start + 1, end, 3)), start + 1, 3);
-  const { fields, rest } = parseLeadingMetadata(preamble, actionMetadataKeys, context);
+  const found = locateSections(ctx, ref, actionItemSections, range, 3);
+  const preamble = readNodePreamble(ctx, range, actionItemDescriptor.patchFields, ref);
 
   const patch: ActionItemPatch = {
     ref,
-    delete: fields.Delete === undefined ? false : parseBoolean(fields.Delete, "Delete", context),
+    delete: preamble.fields.Delete === undefined ? false : parseBoolean(preamble.fields.Delete, "Delete", ref),
     title: match[2]!.trim(),
   };
-  if (rest) patch.context = rest;
-  if (fields.Position !== undefined) patch.position = parsePosition(fields.Position, context);
-  if (fields.Handle !== undefined) patch.handle = fields.Handle;
-  if (fields.Status !== undefined) {
-    const status = actionItemStatuses.find((candidate) => candidate.toLowerCase() === fields.Status!.toLowerCase());
-    if (!status) throw new Error(`Plan Markdown error${lineLocation(node)}: ${ref} has invalid status \`${fields.Status}\`; allowed values are ${actionItemStatuses.join(", ")}.`);
-    patch.status = status;
+  if (preamble.rest) patch.context = preamble.rest;
+  if (preamble.fields.Position !== undefined) patch.position = parsePosition(preamble.fields.Position, ref);
+  if (preamble.fields.Handle !== undefined) patch.handle = preamble.fields.Handle;
+  if (preamble.fields.Status !== undefined) {
+    const status = resolveStatus(actionItemDescriptor.statuses!, preamble.fields.Status);
+    if (!status) throw invalidMetadataStatus(node, ref, preamble.fields.Status, actionItemDescriptor.statuses!);
+    patch.status = status as ActionItem["status"];
   }
 
-  const acceptanceStart = sectionIndexes.get("Acceptance Criteria");
-  if (acceptanceStart !== undefined) {
-    patch.acceptanceCriteria = parsePartialItems(content, nodes, acceptanceStart + 1, sectionEnd(acceptanceStart), "requirements").map((item) => {
-      const criterion: NonNullable<ActionItemPatch["acceptanceCriteria"]>[number] = { ref: item.ref, delete: item.delete };
-      if (item.value.title !== undefined) criterion.title = item.value.title;
-      if (item.value.details !== undefined) criterion.details = item.value.details;
-      if (item.handle !== undefined) criterion.handle = item.handle;
-      return criterion;
-    });
-  }
-  const triggerStart = sectionIndexes.get("Trigger Sources");
-  if (triggerStart !== undefined) {
-    patch.triggerSources = parseBulletList(nodes.slice(triggerStart + 1, sectionEnd(triggerStart)).find((entry) => entry.type === "list")).map((entry) => {
-      const source = entry.match(/^(.+?)\s+-\s+(.+)$/);
-      if (!source) throw new Error(`Plan Markdown error: invalid trigger source \`${entry}\`. Expected \`- <reference> - <short description>\`.`);
-      return { ref: source[1]!, title: source[2]! };
-    });
-  }
-  const assigneesStart = sectionIndexes.get("Assignees");
-  if (assigneesStart !== undefined) {
-    patch.assignees = parseBulletList(nodes.slice(assigneesStart + 1, sectionEnd(assigneesStart)).find((entry) => entry.type === "list"));
+  for (const [section, sectionRange] of found) {
+    if (isHeadingItems(section)) {
+      patch.acceptanceCriteria = parseHeadingItems(ctx, section, sectionRange)
+        .map((item) => toItemPatch(item, section))
+        .map((item) => {
+          const criterion: NonNullable<ActionItemPatch["acceptanceCriteria"]>[number] = { ref: item.ref, delete: item.delete };
+          if (item.value.title !== undefined) criterion.title = item.value.title;
+          if (item.value.details !== undefined) criterion.details = item.value.details;
+          if (item.handle !== undefined) criterion.handle = item.handle;
+          return criterion;
+        });
+      continue;
+    }
+    if (!isBulletList(section)) continue;
+    const values = parseBulletList(ctx, section, sectionRange);
+    if (section.key === "triggerSources") patch.triggerSources = values as ActionItem["triggerSources"];
+    else patch.assignees = values as string[];
   }
   return patch;
 }
 
 /**
  * Parse a partial plan document: a Markdown plan document that may omit anything that is
- * not being changed. Root headings and component subsections are optional, references may
- * be `New` placeholders, and nodes may carry `Delete`/`Replace`/`Position`/`Handle`
- * metadata fields.
+ * not being changed. Root headings and subsections are optional, references may be `New`
+ * placeholders, and nodes may carry `Delete`/`Replace`/`Position`/`Handle` metadata.
  */
 export function parsePlanPatchMarkdown(markdown: string): PlanPatch {
   const parsed = matter(markdown);
   const reference = parsed.data.reference === undefined ? "" : String(parsed.data.reference).trim();
-  if (!reference || reference.toLowerCase() === "new") {
-    throw new Error("Plan Markdown error: a partial plan document must carry the persisted plan `reference` in its frontmatter.");
-  }
-  const content = parsed.content;
-  const nodes = parseMarkdownNodes(content);
-  const blockStarts = nodes
+  if (!reference || reference.toLowerCase() === newNodePlaceholder.toLowerCase()) throw missingPersistedReference();
+
+  const ctx = createParseContext(parsed.content, "partial");
+  const blockStarts = ctx.nodes
     .map((node, index) => ({ node, index }))
     .filter(({ node }) => node.type === "heading" && (node.depth === 1 || node.depth === 2))
     .map(({ index }) => index);
@@ -390,23 +361,38 @@ export function parsePlanPatchMarkdown(markdown: string): PlanPatch {
   const components: ComponentPatch[] = [];
   const actionItems: ActionItemPatch[] = [];
   blockStarts.forEach((start, order) => {
-    const node = nodes[start]!;
+    const node = ctx.nodes[start]!;
     if (node.depth === 1) return;
-    const end = blockStarts[order + 1] ?? nodes.length;
+    const range: NodeRange = { start, end: blockStarts[order + 1] ?? ctx.nodes.length };
     const heading = headingText(node);
-    if (/^COMP-(?:\d+|New)\s*-/i.test(heading)) components.push(parsePartialComponent(content, nodes, start, end));
-    else if (/^ACTION-(?:\d+|New)\s*-/i.test(heading)) actionItems.push(parsePartialActionItem(content, nodes, start, end));
-    else throw new Error(`Plan Markdown error${lineLocation(node)}: unsupported \`## ${heading}\` heading. Expected \`COMP-<number|New> - <title>\` or \`ACTION-<number|New> - <title>\`.`);
+    if (refHeadingPrefix(componentDescriptor.refPrefix, true).test(heading)) {
+      components.push(parsePartialComponent(ctx, range));
+      return;
+    }
+    if (refHeadingPrefix(actionItemDescriptor.refPrefix, true).test(heading)) {
+      actionItems.push(parsePartialActionItem(ctx, range));
+      return;
+    }
+    throw unsupportedBlockHeading(node, heading, planCollections.map(
+      ({ node: descriptor }) => `${descriptor.refPrefix}<number|New> - <title>`,
+    ));
   });
 
   const meta: PlanPatch["meta"] = {};
-  if (parsed.data.title !== undefined) meta.title = String(parsed.data.title);
-  if (parsed.data.description !== undefined) meta.description = String(parsed.data.description);
-  if (parsed.data.tags !== undefined) meta.tags = (parsed.data.tags as unknown[]).map((tag) => String(tag));
-  if (parsed.data.status !== undefined) {
-    const status = planStatuses.find((candidate) => candidate.toLowerCase() === String(parsed.data.status).toLowerCase());
-    if (!status) throw new Error(`Plan Markdown error: invalid frontmatter status \`${String(parsed.data.status)}\`; allowed values are ${planStatuses.join(", ")}.`);
-    meta.status = status;
+  for (const field of planPatchableFields) {
+    const value = parsed.data[field];
+    if (value === undefined) continue;
+    if (field === "tags") {
+      meta.tags = (value as unknown[]).map((tag) => String(tag));
+      continue;
+    }
+    if (field === "status") {
+      const status = resolveStatus(planStatuses, String(value));
+      if (!status) throw invalidFrontmatterStatus(String(value), planStatuses);
+      meta.status = status as Plan["status"];
+      continue;
+    }
+    meta[field] = String(value);
   }
 
   return { reference, meta, components, actionItems };
@@ -416,7 +402,7 @@ export function parsePlanPatchMarkdown(markdown: string): PlanPatch {
 /* Merge engine                                                               */
 /* -------------------------------------------------------------------------- */
 
-type ItemNode = TextItem & { status?: string; findings?: string };
+type ItemNode = TextItem & { status?: string } & Record<string, unknown>;
 
 type TrackedItem = {
   node: ItemNode;
@@ -425,7 +411,7 @@ type TrackedItem = {
 };
 
 function emptyItemBuckets(): Record<ComponentItemKey, TrackedItem[]> {
-  return { requirements: [], constraints: [], decisions: [], knowledgeGaps: [], notes: [], questions: [] };
+  return Object.fromEntries(componentItemSections.map(({ key }) => [key, [] as TrackedItem[]])) as Record<ComponentItemKey, TrackedItem[]>;
 }
 
 type WorkingComponent = {
@@ -446,7 +432,7 @@ function toWorkingComponent(component: Component): WorkingComponent {
     ref: component.ref,
     title: component.title,
     description: component.description,
-    items: Object.fromEntries(componentSections.map(({ key }) => [
+    items: Object.fromEntries(componentItemSections.map(({ key }) => [
       key,
       component[key].map((item): TrackedItem => ({
         node: { ...item },
@@ -458,20 +444,35 @@ function toWorkingComponent(component: Component): WorkingComponent {
   };
 }
 
-function applyItemValue(node: ItemNode, value: ItemPatchValue): void {
+function sectionFor(kind: ComponentItemKey): HeadingItemsSection<ComponentItemKey> {
+  return componentItemSections.find((entry) => entry.key === kind)!;
+}
+
+function applyItemValue(node: ItemNode, value: ItemPatchValue, section: HeadingItemsSection): void {
   if (value.title !== undefined) node.title = value.title;
   if (value.details !== undefined) node.details = value.details;
   if (value.status !== undefined) node.status = value.status;
-  if (value.findings !== undefined) node.findings = value.findings;
+  const supplied = value as unknown as Record<string, unknown>;
+  for (const subsection of section.subsections) {
+    if (supplied[subsection.key] !== undefined) node[subsection.key] = supplied[subsection.key];
+  }
 }
 
+/**
+ * Build a new item from a patch, filling in the defaults its descriptor declares: the
+ * first allowed status, and an empty body for each nested subsection.
+ */
 function createItem(patch: ItemPatch): TrackedItem {
-  const label = componentSections.find((entry) => entry.key === patch.kind)!.label;
-  const node: ItemNode = { ref: newItemRef, title: patch.value.title ?? `${label} ${newItemRef}`, details: patch.value.details ?? "" };
-  if (patch.kind === "decisions") node.status = patch.value.status ?? "Open";
-  if (patch.kind === "knowledgeGaps") {
-    node.status = patch.value.status ?? "Open";
-    node.findings = patch.value.findings ?? "";
+  const section = sectionFor(patch.kind);
+  const node: ItemNode = {
+    ref: newItemRef,
+    title: patch.value.title ?? `${section.singularLabel} ${newItemRef}`,
+    details: patch.value.details ?? "",
+  };
+  if (section.statuses !== null) node.status = patch.value.status ?? section.statuses[0]!;
+  const supplied = patch.value as unknown as Record<string, unknown>;
+  for (const subsection of section.subsections) {
+    node[subsection.key] = supplied[subsection.key] ?? "";
   }
   const provenance: NodeProvenance = { originRef: null, title: node.title };
   if (patch.handle !== undefined) provenance.handle = patch.handle;
@@ -486,7 +487,7 @@ function applyItemPatches(component: WorkingComponent, patches: ItemPatch[], rep
       if (patch.delete) continue;
       const existing = snapshot[patch.kind].find((tracked) => tracked.node.ref === patch.ref);
       if (patch.ref !== newItemRef && existing) {
-        applyItemValue(existing.node, patch.value);
+        applyItemValue(existing.node, patch.value, sectionFor(patch.kind));
         existing.provenance.title = existing.node.title;
         component.items[patch.kind].push(existing);
       } else {
@@ -510,7 +511,7 @@ function applyItemPatches(component: WorkingComponent, patches: ItemPatch[], rep
       continue;
     }
     const tracked = list[index]!;
-    applyItemValue(tracked.node, patch.value);
+    applyItemValue(tracked.node, patch.value, sectionFor(patch.kind));
     tracked.provenance.title = tracked.node.title;
   }
 }
@@ -564,8 +565,11 @@ function applyPositions<T>(entries: T[], positioned: Array<{ entry: T; position:
 }
 
 function nextActionRef(actions: WorkingAction[]): string {
-  const numbers = actions.map((action) => Number(action.node.ref.slice("ACTION-".length))).filter(Number.isFinite);
-  return `ACTION-${(numbers.length ? Math.max(...numbers) : 0) + 1}`;
+  const { refPrefix } = actionItemDescriptor;
+  const numbers = actions
+    .map((action) => refNumber(action.node.ref, refPrefix))
+    .filter((value): value is number => value !== undefined);
+  return `${refPrefix}${(numbers.length ? Math.max(...numbers) : 0) + 1}`;
 }
 
 function applyActionPatch(action: WorkingAction, patch: ActionItemPatch): void {
@@ -583,7 +587,7 @@ function applyActionPatch(action: WorkingAction, patch: ActionItemPatch): void {
         let label = 0;
         while (used.has(subsectionLabel(label))) label += 1;
         const ref = subsectionLabel(label);
-        action.node.acceptanceCriteria.push({ ref, title: criterion.title ?? `Acceptance Criteria ${ref}`, details: criterion.details ?? "" });
+        action.node.acceptanceCriteria.push({ ref, title: criterion.title ?? `${acceptanceCriteriaSection.singularLabel} ${ref}`, details: criterion.details ?? "" });
         continue;
       }
       if (criterion.delete) {
@@ -684,23 +688,22 @@ export function applyPlanPatch(existing: Plan, patch: PlanPatch): PlanPatchResul
   const orderedComponents = applyPositions(components, componentPositions);
   const orderedActions = applyPositions(actions, actionPositions);
 
-  plan.components = orderedComponents.map((component): Component => ({
-    ref: component.ref,
-    title: component.title,
-    description: component.description,
-    requirements: component.items.requirements.map(({ node }) => ({ ref: node.ref, title: node.title, details: node.details })),
-    constraints: component.items.constraints.map(({ node }) => ({ ref: node.ref, title: node.title, details: node.details })),
-    decisions: component.items.decisions.map(({ node }) => ({ ref: node.ref, title: node.title, details: node.details, status: node.status as Component["decisions"][number]["status"] })),
-    knowledgeGaps: component.items.knowledgeGaps.map(({ node }): KnowledgeGap => ({
-      ref: node.ref,
-      title: node.title,
-      details: node.details,
-      status: node.status as KnowledgeGap["status"],
-      findings: node.findings ?? "",
-    })),
-    notes: component.items.notes.map(({ node }) => ({ ref: node.ref, title: node.title, details: node.details })),
-    questions: component.items.questions.map(({ node }) => ({ ref: node.ref, title: node.title, details: node.details })),
-  }));
+  plan.components = orderedComponents.map((component): Component => {
+    const record: Record<string, unknown> = {
+      ref: component.ref,
+      title: component.title,
+      description: component.description,
+    };
+    for (const section of componentItemSections) {
+      record[section.key] = component.items[section.key].map(({ node }) => {
+        const projected: Record<string, unknown> = { ref: node.ref, title: node.title, details: node.details };
+        if (section.statuses !== null) projected.status = node.status;
+        for (const subsection of section.subsections) projected[subsection.key] = node[subsection.key] ?? "";
+        return projected;
+      });
+    }
+    return record as unknown as Component;
+  });
   plan.actionItems = orderedActions.map(({ node }) => node);
 
   const normalized = normalizePlan(plan);
@@ -708,9 +711,9 @@ export function applyPlanPatch(existing: Plan, patch: PlanPatch): PlanPatchResul
   // Placeholder-titled nodes take their canonical `<Label> <ref>` title once refs are assigned.
   orderedComponents.forEach((component, componentIndex) => {
     const target = normalized.plan.components[componentIndex]!;
-    for (const { key, label } of componentSections) {
+    for (const { key, singularLabel: label } of componentItemSections) {
       component.items[key].forEach((tracked, itemIndex) => {
-        const node = (target[key] as TextItem[])[itemIndex]!;
+        const node = (target[key] as unknown as TextItem[])[itemIndex]!;
         if (tracked.placeholderTitle) node.title = `${label} ${node.ref}`;
         tracked.provenance.title = node.title;
       });
@@ -721,7 +724,7 @@ export function applyPlanPatch(existing: Plan, patch: PlanPatch): PlanPatchResul
   const provenance: PlanProvenance = {
     components: orderedComponents.map((component) => ({
       ...component.provenance,
-      items: Object.fromEntries(componentSections.map(({ key }) => [
+      items: Object.fromEntries(componentItemSections.map(({ key }) => [
         key,
         component.items[key].map(({ provenance: itemProvenance }) => itemProvenance),
       ])) as Record<ComponentItemKey, NodeProvenance[]>,

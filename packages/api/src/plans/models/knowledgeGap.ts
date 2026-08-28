@@ -23,7 +23,7 @@ export const findingsSection = {
   required: true,
   rejectNestedLabel: "Finding",
   requiredForStatuses: statusesRequiringFindings,
-} satisfies ProseSection;
+} satisfies ProseSection<"findings">;
 
 export const knowledgeGapSchema = textItemSchema.extend({
   status: z.enum(knowledgeGapStatuses),
@@ -80,4 +80,4 @@ export const knowledgeGapsSection = {
   subsections: [findingsSection],
   patchFields: ["Status", "Delete", "Handle"],
   model: knowledgeGapModel,
-} satisfies HeadingItemsSection;
+} satisfies HeadingItemsSection<"knowledgeGaps">;

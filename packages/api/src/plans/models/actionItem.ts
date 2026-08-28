@@ -17,21 +17,15 @@ import {
   type SectionDescriptor,
 } from "./descriptor.js";
 import { contentBetween, headingText } from "../shared/ast.js";
-import {
-  duplicateSubsection,
-  invalidNodeHeading,
-  invalidStatus,
-  missingSubsection,
-  unsupportedSubsection,
-} from "../shared/errors.js";
+import { invalidNodeHeading, invalidStatus } from "../shared/errors.js";
 import { canonicalRefPattern, placeholderRef, refHeadingPattern } from "../shared/refs.js";
 import {
   formatBulletList,
   formatHeadingItems,
+  locateSections,
   parseBulletList,
   parseHeadingItems,
   resolveStatus,
-  sectionIndexes,
 } from "./section.js";
 import { textItemSchema, textSection } from "./textItem.js";
 
@@ -151,25 +145,9 @@ export function parseActionItem(ctx: ParseContext, range: NodeRange): ActionItem
   if (!match) throw invalidNodeHeading(node, actionItemDescriptor.label, heading, headingSyntax(allowPlaceholder));
   const ref = match[1]!;
 
-  const found = new Map<SectionDescriptor, number>();
-  for (const { heading: name, index } of sectionIndexes(ctx.nodes, { start: range.start + 1, end: range.end }, 3)) {
-    const section = actionItemSections.find((candidate) => candidate.heading === name);
-    if (!section) throw unsupportedSubsection(ctx.nodes[index]!, ref, 3, name);
-    if (found.has(section)) throw duplicateSubsection(ctx.nodes[index]!, ref, 3, name);
-    found.set(section, index);
-  }
-  if (ctx.mode === "strict") {
-    for (const section of actionItemSections) {
-      if (section.required && !found.has(section)) throw missingSubsection(node, ref, 3, section.heading);
-    }
-  }
-
-  const boundaries = [...found.values()].sort((left, right) => left - right);
-  const rangeFor = (section: SectionDescriptor): NodeRange => {
-    const start = found.get(section);
-    if (start === undefined) return { start: range.end, end: range.end };
-    return { start: start + 1, end: boundaries.find((value) => value > start) ?? range.end };
-  };
+  const found = locateSections(ctx, ref, actionItemSections, range, 3);
+  const rangeFor = (section: SectionDescriptor): NodeRange =>
+    found.get(section) ?? { start: range.end, end: range.end };
 
   const preamble = contentBetween(ctx.source, ctx.nodes, range.start + 1, 3);
   const statusMatch = preamble.match(statusLinePattern);
