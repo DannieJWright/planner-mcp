@@ -58,7 +58,7 @@ export function normalizePlan(plan: Plan): PlanIngestResult {
     componentNumbers.set(component.ref.slice(refPrefix.length), String(componentNumber));
     component.ref = `${refPrefix}${componentNumber}`;
 
-    for (const section of referenceSections) {
+    for (const section of referenceSections()) {
       const items = (component as unknown as Record<string, Indexed[]>)[section.key]!;
       items.forEach((item, itemIndex) => {
         const newRef = `${componentNumber}.${subsectionLabel(itemIndex)}`;
@@ -68,13 +68,14 @@ export function normalizePlan(plan: Plan): PlanIngestResult {
     }
   });
 
-  const typedPatterns = referenceSections.map((section) => ({
+  const sections = referenceSections();
+  const typedPatterns = sections.map((section) => ({
     key: section.key,
     aliases: section.aliases,
     pattern: new RegExp(`\\b(${aliasGroup(section.aliases)})(\\s+|\\.\\s*)(\\d+(?:\\.[A-Za-z]+)+)`, "gi"),
     suffix: new RegExp(`(?:${aliasGroup(section.aliases)})(?:\\s+|\\.\\s*)\\d+(?:\\.[A-Za-z]+)+$`, "i"),
   }));
-  const suppressedSuffixes = suppressedReferenceSections.map(
+  const suppressedSuffixes = suppressedReferenceSections().map(
     (section) => new RegExp(`(?:${aliasGroup(section.aliases)})\\s+\\d+(?:\\.[A-Za-z]+)+$`, "i"),
   );
   const failures: OrderingValidationFailure[] = [];
@@ -120,7 +121,7 @@ export function normalizePlan(plan: Plan): PlanIngestResult {
   for (const component of plan.components) {
     component.title = rewrite(component.title, component.ref);
     component.description = rewrite(component.description, component.ref);
-    for (const section of referenceSections) {
+    for (const section of sections) {
       for (const item of (component as unknown as Record<string, Indexed[]>)[section.key]!) {
         const context = `${section.singularLabel} ${item.ref}`;
         item.title = rewrite(item.title, context);

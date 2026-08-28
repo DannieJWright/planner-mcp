@@ -1,5 +1,7 @@
 import type { FastifyInstance } from "fastify";
-import { decisionStatuses, knowledgeGapStatuses, type Decision, type KnowledgeGap, type Plan } from "./domain.js";
+import type { Plan } from "./domain.js";
+import { componentItemSections } from "./models/component.js";
+import { newPlanReference } from "./models/plan.js";
 import { compareItemRefs, formatItemsExcerptMarkdown, formatPlanMarkdown, ingestPlanMarkdown, type ItemExcerptGroup } from "./markdown.js";
 import {
   applyPlanPatch,
@@ -46,7 +48,7 @@ export function registerPlanRoutes(app: FastifyInstance, repository: PlanReposit
     if (typeof request.body !== "string") return reply.code(400).send({ error: "Expected a Markdown request body" });
     try {
       const { plan, validationFailures } = ingestPlanMarkdown(request.body);
-      const existing = plan.reference === "New" ? undefined : repository.get(plan.reference);
+      const existing = plan.reference === newPlanReference ? undefined : repository.get(plan.reference);
       const referenceChanges: ReferenceChanges = existing
         ? diffReferences(existing, plan, identityProvenance(plan))
         : emptyReferenceChanges;
@@ -98,11 +100,14 @@ export function registerPlanRoutes(app: FastifyInstance, repository: PlanReposit
     return { reference, validationFailures, referenceChanges };
   });
 
+  /** `knowledgeGaps` becomes `knowledge-gaps`, `decisions` becomes `decisions`. */
+  const routeSlug = (key: string): string => key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+
   const registerItemRoute = (
     path: string,
     label: string,
     allowedStatuses: readonly string[],
-    select: (component: Plan["components"][number]) => Array<KnowledgeGap | Decision>,
+    select: (component: Plan["components"][number]) => Array<{ ref: string }>,
   ): void => {
     app.get<{ Params: { reference: string }; Querystring: ItemQuery }>(path, async (request, reply) => {
       const status = request.query.status ?? allowedStatuses[0]!;
@@ -123,7 +128,15 @@ export function registerPlanRoutes(app: FastifyInstance, repository: PlanReposit
     });
   };
 
-  // Retrieval sub-resources (COMP-3 / COMP-4).
-  registerItemRoute("/plans/:reference/knowledge-gaps", "Knowledge Gap", knowledgeGapStatuses, (component) => component.knowledgeGaps);
-  registerItemRoute("/plans/:reference/decisions", "Decision", decisionStatuses, (component) => component.decisions);
+  // Retrieval sub-resources: one per status-bearing component item section, so adding
+  // such a section adds its retrieval route without touching this file.
+  for (const section of componentItemSections) {
+    if (section.statuses === null) continue;
+    registerItemRoute(
+      `/plans/:reference/${routeSlug(section.key)}`,
+      section.singularLabel,
+      section.statuses,
+      (component) => (component as unknown as Record<string, Array<{ ref: string }>>)[section.key]!,
+    );
+  }
 }

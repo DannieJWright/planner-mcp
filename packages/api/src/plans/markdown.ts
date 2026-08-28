@@ -47,7 +47,7 @@ export type { OrderingValidationFailure, PlanIngestResult, PlanValidationFailure
 
 /** Parse a `#### <Label> <ref> - <title>` heading using the registry's label set. */
 export function parseItemHeading(heading: string): { ref: string; title?: string } | undefined {
-  return parseItemHeadingWithLabels(heading, itemLabels);
+  return parseItemHeadingWithLabels(heading, itemLabels());
 }
 
 /** Parse, validate, and normalize a complete plan document. */

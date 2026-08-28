@@ -4,7 +4,7 @@ import { planSchema, type ActionItem, type Component, type Plan, type PlanSummar
 import type { ItemRowValues } from "./models/descriptor.js";
 import { newPlanReference, planRefPrefix } from "./models/plan.js";
 import { componentItemSections } from "./models/component.js";
-import { persistedItemSections, sectionByDbKind } from "./models/registry.js";
+import { dbKindIndex, persistedItemSections } from "./models/registry.js";
 
 type PlanRow = {
   reference: string;
@@ -133,7 +133,7 @@ export class PlanRepository {
       plan.components.forEach((component, componentPosition) => {
         const result = insertComponent.run(reference, component.ref, component.title, component.description, componentPosition);
         const record = component as unknown as Record<string, Array<Record<string, unknown>>>;
-        for (const section of persistedItemSections) {
+        for (const section of persistedItemSections()) {
           record[section.key]!.forEach((item, position) => {
             const values = section.model.toRow(item);
             const inserted = insertItem.run(
@@ -195,6 +195,7 @@ export class PlanRepository {
     const findingsStatement = this.database.prepare(
       "SELECT ref, details FROM knowledge_gap_findings WHERE knowledge_gap_id = ? ORDER BY position",
     );
+    const sectionsByKind = dbKindIndex();
     const components = componentRows.map((componentRow): Component => {
       const record: Record<string, unknown> = {
         ref: componentRow.ref,
@@ -207,7 +208,7 @@ export class PlanRepository {
         .prepare("SELECT id, kind, ref, title, details, status FROM items WHERE component_id = ? ORDER BY kind, position")
         .all(componentRow.id) as unknown as ItemRow[];
       for (const item of items) {
-        const section = sectionByDbKind(item.kind);
+        const section = sectionsByKind.get(item.kind);
         if (!section) throw new Error(`Unknown item kind in database: ${item.kind}`);
         const subsections: Record<string, string[]> = {};
         if (section.subsections.length > 0) {

@@ -4,6 +4,10 @@
  * Model files declare their own descriptors; this module only aggregates them and
  * provides indexed access. Keeping the direction one-way (models never import the
  * registry) avoids an import cycle and keeps each model file self-contained.
+ *
+ * Every aggregate is computed on demand rather than captured at module load, so a
+ * section registered after startup is visible to parsing, normalization, and
+ * persistence. `extensibility.test.ts` depends on this.
  */
 import {
   isBulletList,
@@ -22,66 +26,71 @@ import { planDescriptor } from "./plan.js";
 export const nodeDescriptors: NodeDescriptor[] = [planDescriptor, componentDescriptor, actionItemDescriptor];
 
 /** Every section belonging to any node type. */
-export const allSections: SectionDescriptor[] = nodeDescriptors.flatMap((node) => node.sections);
-
-export const allHeadingItemSections: HeadingItemsSection[] = allSections.filter(isHeadingItems);
-export const allBulletListSections: BulletListSection[] = allSections.filter(isBulletList);
-
-/** Nested prose subsections declared by any heading-item section, e.g. Findings. */
-export const allProseSections: ProseSection[] = allHeadingItemSections
-  .flatMap((section) => section.subsections)
-  .filter(isProse);
-
-/** Every singular item label that may begin a `####` item heading. */
-export const itemLabels: string[] = [
-  ...new Set([
-    ...allHeadingItemSections.map((section) => section.singularLabel),
-    ...allProseSections.map((subsection) => subsection.rejectNestedLabel),
-  ]),
-];
-
-/** Sections whose items are renumbered and whose references are rewritten in prose. */
-export const referenceSections: HeadingItemsSection[] = componentItemSections.filter(
-  (section) => section.referenceRole === "renumber",
-);
-
-/** Sections whose aliases suppress false unresolved-reference reports. */
-export const suppressedReferenceSections: HeadingItemsSection[] = allHeadingItemSections.filter(
-  (section) => section.referenceRole === "suppress",
-);
-
-/** Component item sections that are persisted in the `items` table. */
-export const persistedItemSections: HeadingItemsSection[] = componentItemSections.filter(
-  (section) => section.dbKind !== null,
-);
-
-function indexBy<T>(entries: T[], key: (entry: T) => string): Map<string, T> {
-  return new Map(entries.map((entry) => [key(entry), entry]));
+export function allSections(): SectionDescriptor[] {
+  return nodeDescriptors.flatMap((node) => node.sections);
 }
 
-const headingItemsByKey = indexBy(allHeadingItemSections, (section) => section.key);
-const componentSectionsByHeading = indexBy(componentItemSections, (section) => section.heading);
-const componentSectionsByKey = indexBy(componentItemSections, (section) => section.key);
-const sectionsByDbKind = indexBy(persistedItemSections, (section) => section.dbKind!);
+export function allHeadingItemSections(): HeadingItemsSection[] {
+  return allSections().filter(isHeadingItems);
+}
+
+export function allBulletListSections(): BulletListSection[] {
+  return allSections().filter(isBulletList);
+}
+
+/** Nested prose subsections declared by any heading-item section, e.g. Findings. */
+export function allProseSections(): ProseSection[] {
+  return allHeadingItemSections().flatMap((section) => section.subsections).filter(isProse);
+}
+
+/** Every singular item label that may begin a `####` item heading. */
+export function itemLabels(): string[] {
+  return [
+    ...new Set([
+      ...allHeadingItemSections().map((section) => section.singularLabel),
+      ...allProseSections().map((subsection) => subsection.rejectNestedLabel),
+    ]),
+  ];
+}
+
+/** Sections whose items are renumbered and whose references are rewritten in prose. */
+export function referenceSections(): Array<HeadingItemsSection<string>> {
+  return componentItemSections.filter((section) => section.referenceRole === "renumber");
+}
+
+/** Sections whose aliases only suppress false unresolved-reference reports. */
+export function suppressedReferenceSections(): HeadingItemsSection[] {
+  return allHeadingItemSections().filter((section) => section.referenceRole === "suppress");
+}
+
+/** Component item sections that are persisted in the `items` table. */
+export function persistedItemSections(): Array<HeadingItemsSection<string>> {
+  return componentItemSections.filter((section) => section.dbKind !== null);
+}
+
+/** Index of persistence kind to section, built once per read. */
+export function dbKindIndex(): Map<string, HeadingItemsSection<string>> {
+  return new Map(persistedItemSections().map((section) => [section.dbKind!, section]));
+}
 
 /** Look up any heading-item section by its model key. */
 export function sectionByKey(key: string): HeadingItemsSection | undefined {
-  return headingItemsByKey.get(key);
+  return allHeadingItemSections().find((section) => section.key === key);
 }
 
 /** Look up a component item section by its `### <heading>` text. */
 export function componentSectionByHeading(heading: string): HeadingItemsSection | undefined {
-  return componentSectionsByHeading.get(heading);
+  return componentItemSections.find((section) => section.heading === heading);
 }
 
 /** Look up a component item section by its model key. */
 export function componentSectionByKey(key: string): HeadingItemsSection | undefined {
-  return componentSectionsByKey.get(key);
+  return componentItemSections.find((section) => section.key === key);
 }
 
 /** Look up a component item section by its persistence kind value. */
 export function sectionByDbKind(kind: string): HeadingItemsSection | undefined {
-  return sectionsByDbKind.get(kind);
+  return persistedItemSections().find((section) => section.dbKind === kind);
 }
 
 /** Look up a section of any shape on a node descriptor by its `### <heading>` text. */

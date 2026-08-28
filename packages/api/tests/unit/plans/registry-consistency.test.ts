@@ -48,19 +48,19 @@ describe("model registry consistency", () => {
   });
 
   it("keeps model keys unique across every section", () => {
-    const keys = allSections.map((section) => section.key);
+    const keys = allSections().map((section) => section.key);
     expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("keeps singular item labels unique", () => {
-    const labels = allHeadingItemSections.map((section) => section.singularLabel);
+    const labels = allHeadingItemSections().map((section) => section.singularLabel);
     expect(new Set(labels).size).toBe(labels.length);
   });
 
   it("keeps persistence kinds unique and resolvable in both directions", () => {
-    const kinds = persistedItemSections.map((section) => section.dbKind!);
+    const kinds = persistedItemSections().map((section) => section.dbKind!);
     expect(new Set(kinds).size).toBe(kinds.length);
-    for (const section of persistedItemSections) {
+    for (const section of persistedItemSections()) {
       expect(sectionByDbKind(section.dbKind!)).toBe(section);
     }
   });
@@ -73,7 +73,7 @@ describe("model registry consistency", () => {
   });
 
   it("gives every status-bearing section a non-empty status list", () => {
-    for (const section of allHeadingItemSections) {
+    for (const section of allHeadingItemSections()) {
       if (section.statuses === null) continue;
       expect(section.statuses.length).toBeGreaterThan(0);
       expect(new Set(section.statuses).size).toBe(section.statuses.length);
@@ -81,22 +81,22 @@ describe("model registry consistency", () => {
   });
 
   it("only renumbers references for component item sections", () => {
-    for (const section of allHeadingItemSections) {
+    for (const section of allHeadingItemSections()) {
       if (section.referenceRole !== "renumber") continue;
       expect(componentItemSections).toContain(section);
     }
   });
 
   it("gives every reference-bearing section at least one alias", () => {
-    for (const section of allHeadingItemSections) {
+    for (const section of allHeadingItemSections()) {
       if (section.referenceRole === "none") continue;
       expect(section.aliases.length).toBeGreaterThan(0);
     }
   });
 
   it("includes every nested prose subsection label in the item label set", () => {
-    for (const subsection of allProseSections) {
-      expect(itemLabels).toContain(subsection.rejectNestedLabel);
+    for (const subsection of allProseSections()) {
+      expect(itemLabels()).toContain(subsection.rejectNestedLabel);
     }
   });
 
@@ -123,7 +123,7 @@ describe("model registry consistency", () => {
   });
 
   it("gives every section a shape-appropriate configuration", () => {
-    for (const section of allSections) {
+    for (const section of allSections()) {
       if (isHeadingItems(section)) {
         expect(section.itemDepth).toBeGreaterThan(section.sectionDepth);
         expect(section.singularLabel.length).toBeGreaterThan(0);
@@ -137,7 +137,7 @@ describe("model registry consistency", () => {
   });
 
   it("nests prose subsections deeper than the items that own them", () => {
-    for (const section of allHeadingItemSections) {
+    for (const section of allHeadingItemSections()) {
       for (const subsection of section.subsections) {
         expect(subsection.depth).toBeGreaterThan(section.itemDepth);
       }

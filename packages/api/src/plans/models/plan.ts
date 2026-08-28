@@ -66,24 +66,27 @@ export const planDescriptor: NodeDescriptor = {
  * Every singular item label a `####` heading may begin with, gathered from the node
  * descriptors this plan owns.
  *
- * This lives here rather than in the registry so the model files stay free of a
- * dependency on the registry, which imports them.
+ * Computed on each call rather than captured at module load, so a section registered
+ * after startup is recognized. This lives here rather than in the registry so the model
+ * files stay free of a dependency on the registry, which imports them.
  */
-export const itemLabels: string[] = [
-  ...new Set(
-    planCollections
-      .flatMap(({ node }) => node.sections)
-      .filter(isHeadingItems)
-      .flatMap((section) => [
-        section.singularLabel,
-        ...section.subsections.map((subsection) => subsection.rejectNestedLabel),
-      ]),
-  ),
-];
+export function itemLabels(): string[] {
+  return [
+    ...new Set(
+      planCollections
+        .flatMap(({ node }) => node.sections)
+        .filter(isHeadingItems)
+        .flatMap((section) => [
+          section.singularLabel,
+          ...section.subsections.map((subsection) => subsection.rejectNestedLabel),
+        ]),
+    ),
+  ];
+}
 
 /** Build the parse context shared by every model in one pass over a document. */
 export function createParseContext(source: string, mode: ParseMode): ParseContext {
-  return { source, nodes: parseMarkdownNodes(source), mode, labels: itemLabels };
+  return { source, nodes: parseMarkdownNodes(source), mode, labels: itemLabels() };
 }
 
 /** Locate the `# <heading>` grouping each collection, enforcing presence and order. */
