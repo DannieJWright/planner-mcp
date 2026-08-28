@@ -6,10 +6,11 @@ A TypeScript monorepo for turning planning documents into structured SQLite data
 
 | Path | Responsibility |
 |---|---|
-| `packages/api` | Markdown parser/formatter, domain types, SQLite repository, and REST API |
+| `packages/api` | Generic HTTP server plus the `plans` feature folder: model definitions, Markdown parser/formatter, SQLite repository, and REST routes |
 | `packages/mcp` | MCP stdio server and REST API client |
 | `skills/idea-planner` | Phase-gated planning skill: decomposition, user refinement, ingest, and interview; includes direct transfer scripts |
 | `docs/REPOSITORY_MAP.md` | Detailed ownership, data flow, and extension map |
+| `docs/MODELS.md` | How the plan format is defined in code, and how to add a section or model field |
 | `AGENTS.md` | Working rules and verification guidance for coding agents |
 
 ## Requirements
