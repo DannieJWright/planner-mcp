@@ -65,10 +65,10 @@ export type DetailsTransform = {
 };
 
 /** A `####`-item section whose entries are headings with a body. */
-export type HeadingItemsSection = {
+export type HeadingItemsSection<Key extends string = string> = {
   shape: "headingItems";
   /** Field name on the parent model, e.g. `requirements`. */
-  key: string;
+  key: Key;
   /** Exact `### <heading>` text. */
   heading: string;
   /** Singular item label used in item headings, e.g. `Requirement`. */
@@ -94,9 +94,9 @@ export type HeadingItemsSection = {
 };
 
 /** A `###` section whose body is a Markdown bullet list. */
-export type BulletListSection = {
+export type BulletListSection<Key extends string = string> = {
   shape: "bulletList";
-  key: string;
+  key: Key;
   heading: string;
   required: boolean;
   sectionDepth: number;
@@ -111,9 +111,9 @@ export type BulletListSection = {
 };
 
 /** A nested prose subsection, e.g. `##### Findings` under a knowledge gap. */
-export type ProseSection = {
+export type ProseSection<Key extends string = string> = {
   shape: "prose";
-  key: string;
+  key: Key;
   heading: string;
   depth: number;
   required: boolean;
