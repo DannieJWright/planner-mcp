@@ -12,18 +12,23 @@ import {
 } from "./domain.js";
 import {
   componentSections,
-  contentBetween,
-  lineLocation,
-  nodeText,
   normalizePlan,
   parseItemHeading,
-  parseLeadingMetadata,
-  parseMarkdownNodes,
-  subsectionLabel,
   type ComponentItemKey,
-  type MarkdownNode,
   type PlanIngestResult,
 } from "./markdown.js";
+import {
+  contentBetween,
+  headingIndexes,
+  headingText,
+  lineLocation,
+  nextBoundary,
+  nodeText,
+  parseLeadingMetadata,
+  parseMarkdownNodes,
+  type MarkdownNode,
+} from "./shared/ast.js";
+import { subsectionLabel } from "./shared/refs.js";
 
 /* -------------------------------------------------------------------------- */
 /* Patch model                                                                */
@@ -199,10 +204,6 @@ const componentMetadataKeys = ["Delete", "Replace", "Position", "Handle"] as con
 const itemMetadataKeys = ["Status", "Delete", "Handle"] as const;
 const actionMetadataKeys = ["Status", "Delete", "Position", "Handle"] as const;
 
-function headingText(node: MarkdownNode): string {
-  return nodeText(node).replace(/\*\*/g, "").trim();
-}
-
 function parseBoolean(value: string, field: string, context: string): boolean {
   const normalized = value.trim().toLowerCase();
   if (["true", "yes", "1"].includes(normalized)) return true;
@@ -216,23 +217,6 @@ function parsePosition(value: string, context: string): number {
     throw new Error(`Plan Markdown error: ${context} has an invalid \`Position\` value \`${value}\`. Expected a whole number.`);
   }
   return parsed;
-}
-
-function headingIndexes(nodes: MarkdownNode[], start: number, end: number, depth: number): number[] {
-  const indexes: number[] = [];
-  for (let index = start; index < end; index += 1) {
-    const node = nodes[index]!;
-    if (node.type === "heading" && node.depth === depth) indexes.push(index);
-  }
-  return indexes;
-}
-
-function nextBoundary(nodes: MarkdownNode[], start: number, end: number, depth: number): number {
-  for (let index = start; index < end; index += 1) {
-    const node = nodes[index]!;
-    if (node.type === "heading" && (node.depth ?? 7) <= depth) return index;
-  }
-  return end;
 }
 
 function parsePartialItems(content: string, nodes: MarkdownNode[], start: number, end: number, kind: ComponentItemKey): ItemPatch[] {

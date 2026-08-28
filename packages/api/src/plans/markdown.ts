@@ -1,20 +1,20 @@
 import matter from "gray-matter";
-import { fromMarkdown } from "mdast-util-from-markdown";
 import YAML from "yaml";
 import { decisionStatuses, knowledgeGapStatuses, planSchema, type ActionItem, type Component, type KnowledgeGap, type Plan, type StatusItem, type TextItem } from "./domain.js";
+import {
+  contentBetween,
+  lineLocation,
+  nodeText,
+  parseLeadingMetadata,
+  parseMarkdownNodes,
+  type MarkdownNode,
+} from "./shared/ast.js";
+import { compareItemRefs, referenceKey, subsectionLabel } from "./shared/refs.js";
 
-type Node = {
-  type: string;
-  depth?: number;
-  value?: string;
-  children?: Node[];
-  position?: {
-    start: { line?: number; offset?: number };
-    end: { offset?: number };
-  };
-};
+export { contentBetween, lineLocation, nodeText, parseLeadingMetadata, parseMarkdownNodes, type MarkdownNode };
+export { compareItemRefs, subsectionLabel };
 
-export type MarkdownNode = Node;
+type Node = MarkdownNode;
 
 const sections = [
   "Requirements",
@@ -67,27 +67,6 @@ export type PlanIngestResult = {
   plan: Plan;
   validationFailures: PlanValidationFailures;
 };
-
-export function subsectionLabel(index: number): string {
-  let length = 1;
-  let offset = index;
-  let blockSize = 26;
-  while (offset >= blockSize) {
-    offset -= blockSize;
-    length += 1;
-    blockSize *= 26;
-  }
-  const letters = Array<string>(length);
-  for (let position = length - 1; position >= 0; position -= 1) {
-    letters[position] = String.fromCharCode(65 + (offset % 26));
-    offset = Math.floor(offset / 26);
-  }
-  return letters.join(".");
-}
-
-function referenceKey(value: string): string {
-  return value.replace(/\s+/g, " ").trim().toLowerCase();
-}
 
 export function normalizePlan(plan: Plan): PlanIngestResult {
   const mappings = new Map<string, string>();
@@ -183,52 +162,7 @@ export function normalizePlan(plan: Plan): PlanIngestResult {
   return { plan, validationFailures: { ordering: failures } };
 }
 
-export function nodeText(node: Node): string {
-  if (typeof node.value === "string") return node.value;
-  return (node.children ?? []).map(nodeText).join("");
-}
-
-export function lineLocation(node: Node): string {
-  return node.position?.start.line === undefined ? "" : ` on line ${node.position.start.line}`;
-}
-
-/** Parse a Markdown body (frontmatter already stripped) into its top-level mdast nodes. */
-export function parseMarkdownNodes(content: string): MarkdownNode[] {
-  return (fromMarkdown(content) as Node).children ?? [];
-}
-
 const itemHeadingPattern = /^(?:Requirement|Constraint|Decision|Knowledge Gap|Finding|Note|Question|Acceptance Criteria)\s+([\w.-]+)(?:\s*[-:]\s*(.*))?$/i;
-
-/** Split an item/component body into its leading `**Key:** value` metadata block and the remaining prose. */
-export function parseLeadingMetadata(
-  body: string,
-  allowedKeys: readonly string[],
-  context: string,
-): { fields: Record<string, string>; rest: string } {
-  const fields: Record<string, string> = {};
-  const lines = body.split("\n");
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index]!;
-    if (line.trim() === "") {
-      const next = lines.slice(index + 1).find((value) => value.trim() !== "");
-      if (next === undefined || !/^\*\*[A-Za-z][A-Za-z ]*:\*\*/.test(next.trim())) break;
-      index += 1;
-      continue;
-    }
-    const match = line.trim().match(/^\*\*([A-Za-z][A-Za-z ]*):\*\*\s*(.*)$/);
-    if (!match) break;
-    const key = match[1]!.trim();
-    const allowed = allowedKeys.find((candidate) => candidate.toLowerCase() === key.toLowerCase());
-    if (!allowed) {
-      throw new Error(`Plan Markdown error: ${context} contains unsupported metadata field \`${key}\`. Allowed fields are ${allowedKeys.join(", ")}.`);
-    }
-    if (allowed in fields) throw new Error(`Plan Markdown error: ${context} contains duplicate metadata field \`${allowed}\`.`);
-    fields[allowed] = match[2]!.trim();
-    index += 1;
-  }
-  return { fields, rest: lines.slice(index).join("\n").trim() };
-}
 
 /** Parse a `#### <Label> <ref> - <title>` heading. Returns undefined when the heading is not an item heading. */
 export function parseItemHeading(heading: string): { ref: string; title?: string } | undefined {
@@ -236,47 +170,6 @@ export function parseItemHeading(heading: string): { ref: string; title?: string
   if (!match) return undefined;
   const title = match[2]?.trim();
   return title ? { ref: match[1]!, title } : { ref: match[1]! };
-}
-
-function refSortKey(ref: string): { component: number; letters: string[]; raw: string } | undefined {
-  const match = ref.trim().match(/^(\d+)\.([A-Za-z]+(?:\.[A-Za-z]+)*)$/);
-  if (!match) return undefined;
-  return { component: Number(match[1]), letters: match[2]!.split("."), raw: ref };
-}
-
-/**
- * Ascending comparator for canonical item references (`<component>.<letter groups>`),
- * ordering by component number, then by letter-group depth, then alphabetically.
- * Non-canonical references sort after canonical ones, compared as plain strings.
- */
-export function compareItemRefs(left: string, right: string): number {
-  const a = refSortKey(left);
-  const b = refSortKey(right);
-  if (!a || !b) {
-    if (!a && !b) return left.localeCompare(right);
-    return a ? -1 : 1;
-  }
-  if (a.component !== b.component) return a.component - b.component;
-  if (a.letters.length !== b.letters.length) return a.letters.length - b.letters.length;
-  for (let index = 0; index < a.letters.length; index += 1) {
-    const comparison = a.letters[index]!.localeCompare(b.letters[index]!);
-    if (comparison !== 0) return comparison;
-  }
-  return 0;
-}
-
-export function contentBetween(markdown: string, nodes: Node[], start: number, headingDepth: number): string {
-  let end = start;
-  for (let index = start; index < nodes.length; index += 1) {
-    const node = nodes[index]!;
-    if (node.type === "heading" && (node.depth ?? 7) <= headingDepth) break;
-    end = index + 1;
-  }
-  if (end === start) return "";
-  const startOffset = nodes[start]?.position?.start.offset;
-  const endOffset = nodes[end - 1]?.position?.end.offset;
-  if (startOffset === undefined || endOffset === undefined) throw new Error("Markdown node is missing source position");
-  return markdown.slice(startOffset, endOffset).trim();
 }
 
 function parseItems(markdown: string, nodes: Node[], start: number, end: number, statusRequired: boolean, depth = 4, allowedStatuses: readonly string[] = ["Open", "Decided", "Resolved", "Closed"]): Array<TextItem | StatusItem> {
@@ -430,8 +323,7 @@ function parseActionItem(markdown: string, nodes: Node[], start: number, end: nu
 
 export function ingestPlanMarkdown(markdown: string): PlanIngestResult {
   const parsed = matter(markdown);
-  const tree = fromMarkdown(parsed.content) as Node;
-  const nodes = tree.children ?? [];
+  const nodes = parseMarkdownNodes(parsed.content);
   const rootHeadings = nodes
     .map((node, index) => ({ node, index }))
     .filter(({ node }) => node.type === "heading" && node.depth === 1);
