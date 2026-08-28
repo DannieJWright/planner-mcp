@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { PlanRepository } from "../../src/repository.js";
-import { samplePlan } from "../fixtures/sample-plan.js";
+import { PlanRepository } from "../../../src/plans/repository.js";
+import { samplePlan } from "../../fixtures/sample-plan.js";
 
 const repositories: PlanRepository[] = [];
 

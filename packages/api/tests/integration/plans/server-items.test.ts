@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { Component, Plan } from "../../src/domain.js";
-import { formatPlanMarkdown } from "../../src/markdown.js";
-import { PlanRepository } from "../../src/repository.js";
-import { createServer } from "../../src/server.js";
+import type { Component, Plan } from "../../../src/plans/domain.js";
+import { formatPlanMarkdown } from "../../../src/plans/markdown.js";
+import { PlanRepository } from "../../../src/plans/repository.js";
+import { createServer } from "../../../src/server.js";
 
 const resources: Array<{ app: FastifyInstance; repository: PlanRepository }> = [];
 

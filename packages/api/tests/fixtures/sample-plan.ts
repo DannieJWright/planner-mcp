@@ -1,4 +1,4 @@
-import type { Plan } from "../../src/domain.js";
+import type { Plan } from "../../src/plans/domain.js";
 
 export const samplePlan: Plan = {
   reference: "New",

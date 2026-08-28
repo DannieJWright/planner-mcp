@@ -1,16 +1,16 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { formatPlanMarkdown, parsePlanMarkdown } from "../../src/markdown.js";
+import { formatPlanMarkdown, parsePlanMarkdown } from "../../../src/plans/markdown.js";
 import {
   applyPlanPatch,
   diffReferences,
   identityProvenance,
   parsePlanPatchMarkdown,
   removePlanComponent,
-} from "../../src/patch.js";
+} from "../../../src/plans/patch.js";
 
-const goldenPath = fileURLToPath(new URL("../fixtures/maximal-plan.md", import.meta.url));
+const goldenPath = fileURLToPath(new URL("../../fixtures/maximal-plan.md", import.meta.url));
 const golden = readFileSync(goldenPath, "utf8");
 const reference = "PLAN-00000000-0000-4000-8000-000000000000";
 const base = () => parsePlanMarkdown(golden);

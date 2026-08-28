@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Component, Plan } from "../../src/domain.js";
-import { applyPlanPatch, diffReferences, parsePlanPatchMarkdown, removePlanComponent, type ReferenceChanges } from "../../src/patch.js";
+import type { Component, Plan } from "../../../src/plans/domain.js";
+import { applyPlanPatch, diffReferences, parsePlanPatchMarkdown, removePlanComponent, type ReferenceChanges } from "../../../src/plans/patch.js";
 
 const frontmatter = "---\nreference: PLAN-abc\n---\n\n";
 

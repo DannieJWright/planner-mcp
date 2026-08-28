@@ -1,4 +1,4 @@
-import type { Plan } from "../../src/domain.js";
+import type { Plan } from "../../src/plans/domain.js";
 
 /**
  * A deliberately maximal plan used to pin encoder/decoder behavior during the

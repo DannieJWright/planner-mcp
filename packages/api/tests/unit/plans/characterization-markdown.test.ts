@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { formatPlanMarkdown, ingestPlanMarkdown, parsePlanMarkdown } from "../../src/markdown.js";
-import { maximalPlan } from "../fixtures/maximal-plan.js";
+import { formatPlanMarkdown, ingestPlanMarkdown, parsePlanMarkdown } from "../../../src/plans/markdown.js";
+import { maximalPlan } from "../../fixtures/maximal-plan.js";
 
-const goldenPath = fileURLToPath(new URL("../fixtures/maximal-plan.md", import.meta.url));
+const goldenPath = fileURLToPath(new URL("../../fixtures/maximal-plan.md", import.meta.url));
 const golden = readFileSync(goldenPath, "utf8");
 
 /**

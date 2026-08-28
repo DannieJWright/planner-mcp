@@ -3,10 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it } from "vitest";
-import { formatPlanMarkdown, parsePlanMarkdown } from "../../src/markdown.js";
-import { PlanRepository } from "../../src/repository.js";
+import { formatPlanMarkdown, parsePlanMarkdown } from "../../../src/plans/markdown.js";
+import { PlanRepository } from "../../../src/plans/repository.js";
 
-const goldenPath = fileURLToPath(new URL("../fixtures/maximal-plan.md", import.meta.url));
+const goldenPath = fileURLToPath(new URL("../../fixtures/maximal-plan.md", import.meta.url));
 const golden = readFileSync(goldenPath, "utf8");
 
 /**

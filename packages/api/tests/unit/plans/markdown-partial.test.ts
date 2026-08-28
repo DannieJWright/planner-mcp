@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { formatPlanMarkdown, ingestPlanMarkdown, parseLeadingMetadata } from "../../src/markdown.js";
-import { parsePlanPatchMarkdown } from "../../src/patch.js";
-import { samplePlan } from "../fixtures/sample-plan.js";
+import { formatPlanMarkdown, ingestPlanMarkdown, parseLeadingMetadata } from "../../../src/plans/markdown.js";
+import { parsePlanPatchMarkdown } from "../../../src/plans/patch.js";
+import { samplePlan } from "../../fixtures/sample-plan.js";
 
 const frontmatter = "---\nreference: PLAN-abc\n---\n\n";
 
