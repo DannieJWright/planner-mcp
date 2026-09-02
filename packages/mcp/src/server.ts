@@ -83,14 +83,15 @@ export function createMcpServer(client: PlannerClient = new PlannerApiClient()):
     [
       "Submit plan content as Markdown directly, without writing or uploading a Markdown file.",
       "`mode: \"full\"` ingests a complete plan document (frontmatter `reference: New` creates a plan, a persisted reference replaces it).",
-      "`mode: \"partial\"` merges a partial document into the persisted plan identified by `reference`: only the nodes present in the document are touched, omitted nodes are left untouched, `New` references create nodes, and nodes may carry `**Delete:** true`, `**Replace:** true`, `**Position:** n`, and `**Handle:** token` metadata fields.",
+      "`mode: \"partial\"` applies a partial document to the persisted plan identified by `reference`: only the nodes present are modified, omitted nodes are left untouched, `New` references create nodes, and nodes may carry `**Delete:** true`, `**Replace:** true`, `**Position:** n`, and `**Handle:** token` metadata fields. A node's body is replaced wholesale — it does not append; send the complete intended content.",
+      "Example of an in-place edit: to modify an existing item such as Requirement 2.A, provide its heading plus its complete new details — any prior text you omit is removed, not preserved.",
       resyncNote,
       additiveNote,
     ].join(" "),
     {
       markdown: z.string().min(1).describe("The plan document. A full plan document in `full` mode; a partial plan document in `partial` mode."),
       reference: z.string().min(1).optional().describe("The persisted plan reference. Required in `partial` mode."),
-      mode: z.enum(["full", "partial"]).default("full").describe("`full` replaces the whole plan; `partial` merges only the supplied nodes."),
+      mode: z.enum(["full", "partial"]).default("full").describe("`full` replaces the whole plan document; `partial` updates only the supplied nodes, and a node's body is replaced wholesale rather than merged."),
     },
     { readOnlyHint: false, idempotentHint: false },
     async ({ markdown, reference, mode }) => {

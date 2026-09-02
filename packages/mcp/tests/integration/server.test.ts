@@ -63,6 +63,14 @@ const writeResult = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("upload_plan", () => {
+  it("documents that a partial node body is replaced wholesale, not appended", async () => {
+    const { client } = await connect();
+    const tool = (await client.listTools()).tools.find(({ name }) => name === "upload_plan");
+    expect(tool?.description).toContain("does not append");
+    expect(tool?.description).toContain("replaced wholesale");
+    expect(tool?.description).toContain("is removed, not preserved");
+  });
+
   it("defaults to full mode and calls uploadPlan", async () => {
     const { api, client } = await connect({ uploadPlan: vi.fn().mockResolvedValue(writeResult()) });
     const tools = await client.listTools();
