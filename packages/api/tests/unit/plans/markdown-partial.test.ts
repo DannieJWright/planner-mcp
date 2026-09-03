@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { formatPlanMarkdown, ingestPlanMarkdown, parseLeadingMetadata } from "../../../src/plans/markdown.js";
+import { formatPlanMarkdown, ingestPlanMarkdown, parseLeadingMetadata, parsePlanMarkdown } from "../../../src/plans/markdown.js";
 import { parsePlanPatchMarkdown } from "../../../src/plans/patch.js";
+import { readStatusLine } from "../../../src/plans/shared/ast.js";
 import { samplePlan } from "../../fixtures/sample-plan.js";
 
 const frontmatter = "---\nreference: PLAN-abc\n---\n\n";
@@ -153,6 +154,44 @@ describe("parseLeadingMetadata", () => {
 
   it("rejects duplicate fields", () => {
     expect(() => parseLeadingMetadata("**Delete:** true\n**Delete:** false", ["Delete"], "Note 1.A")).toThrow("duplicate metadata field");
+  });
+});
+
+describe("readStatusLine", () => {
+  // The single shared mechanism behind the unbolded-status tolerance: both status call
+  // sites (section items and action items) read their leading Status line through this.
+  it("reads bold and unbolded status lines, returning the rest of the body", () => {
+    expect(readStatusLine("**Status:** Open\n\ndetails")).toEqual({ status: "Open", rest: "details" });
+    expect(readStatusLine("Status: Resolved\nmore")).toEqual({ status: "Resolved", rest: "more" });
+  });
+
+  it("leaves a body without a leading status line untouched", () => {
+    expect(readStatusLine("just prose")).toEqual({ status: undefined, rest: "just prose" });
+  });
+});
+
+describe("unbolded status lines", () => {
+  it("accepts an unbolded Status line on a strict knowledge gap item", () => {
+    const markdown = formatPlanMarkdown(samplePlan).replace("**Status:** Open\n\nMeasure peak", "Status: Resolved\n\nMeasure peak");
+    expect(parsePlanMarkdown(markdown).components[0]!.knowledgeGaps[0]).toMatchObject({ status: "Resolved" });
+  });
+
+  it("leaves an unbolded Status line in the details of a partial document", () => {
+    const patch = parsePlanPatchMarkdown(`${frontmatter}## **COMP-1 - One**
+
+### **Knowledge Gaps**
+
+#### Knowledge Gap 1.A - x
+
+Status: Resolved
+
+Body.
+
+##### Findings
+
+F.
+`);
+    expect(patch.components[0]!.items[0]!.value).toEqual({ title: "x", details: "Status: Resolved\n\nBody.", findings: "F." });
   });
 });
 

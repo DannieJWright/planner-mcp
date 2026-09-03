@@ -16,7 +16,7 @@ import {
   type ParseContext,
   type SectionDescriptor,
 } from "./descriptor.js";
-import { contentBetween, headingText } from "../shared/ast.js";
+import { contentBetween, headingText, readStatusLine } from "../shared/ast.js";
 import { invalidNodeHeading, invalidStatus } from "../shared/errors.js";
 import { canonicalRefPattern, placeholderRef, refHeadingPattern } from "../shared/refs.js";
 import {
@@ -124,8 +124,6 @@ export const actionItemDescriptor: NodeDescriptor = {
 };
 
 
-const statusLinePattern = /^(?:\*\*)?Status:(?:\*\*)?\s*([^\n]+)\s*(?:\n\n|\n)?/i;
-
 function headingSyntax(allowPlaceholder: boolean): string {
   const number = allowPlaceholder ? "<number|New>" : "<number>";
   return `## **${refPrefix}${number} - <title>**`;
@@ -150,15 +148,15 @@ export function parseActionItem(ctx: ParseContext, range: NodeRange): ActionItem
     found.get(section) ?? { start: range.end, end: range.end };
 
   const preamble = contentBetween(ctx.source, ctx.nodes, range.start + 1, 3);
-  const statusMatch = preamble.match(statusLinePattern);
-  const status = resolveStatus(actionItemStatuses, statusMatch?.[1]);
-  if (!status) throw invalidStatus(node, ref, statusMatch?.[1], actionItemStatuses);
+  const { status: supplied, rest } = readStatusLine(preamble);
+  const status = resolveStatus(actionItemStatuses, supplied);
+  if (!status) throw invalidStatus(node, ref, supplied, actionItemStatuses);
 
   const action = {
     ref,
     title: match[2]!.trim(),
     status,
-    context: preamble.slice(statusMatch![0].length).trim(),
+    context: rest,
   } as unknown as Record<string, unknown>;
   for (const section of actionItemSections) {
     if (isHeadingItems(section)) {

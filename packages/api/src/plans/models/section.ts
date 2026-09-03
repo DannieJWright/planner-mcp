@@ -16,6 +16,7 @@ import {
   headingText,
   nodeText,
   parseLeadingMetadata,
+  readStatusLine,
   type MarkdownNode,
 } from "../shared/ast.js";
 import {
@@ -67,8 +68,6 @@ export function parseItemHeading(heading: string, labels: string[]): { ref: stri
 export function sectionHeading(section: { sectionDepth: number; heading: string; headingBold: boolean }): string {
   return headingLiteral(section.sectionDepth, section.headingBold ? `**${section.heading}**` : section.heading);
 }
-
-const statusLinePattern = /^(?:\*\*)?Status:(?:\*\*)?\s*([^\n]+)\s*(?:\n\n|\n)?/i;
 
 /**
  * Locate each nested prose subsection of an item and return the body index at which the
@@ -145,10 +144,10 @@ function readMetadata(
     return { metadata: fields, details: rest };
   }
   if (section.statuses === null) return { metadata: {}, details: body };
-  const match = body.match(statusLinePattern);
+  const { status, rest } = readStatusLine(body);
   const metadata: Record<string, string> = {};
-  if (match) metadata.Status = match[1]!.trim();
-  return { metadata, details: match ? body.slice(match[0].length).trim() : body };
+  if (status !== undefined) metadata.Status = status.trim();
+  return { metadata, details: rest };
 }
 
 /** Normalize a supplied status against the descriptor's allowed values. */
@@ -175,6 +174,32 @@ function itemStartIndexes(ctx: ParseContext, section: HeadingItemsSection, range
 }
 
 /**
+ * Reject a same-depth heading in the section's range that no declared item label
+ * recognizes.
+ *
+ * Subsectioned sections locate item boundaries by label so a stray heading with another
+ * section's valid label cannot split an item from its subsection; but a heading that no
+ * section label recognizes was always rejected (strict and partial alike), never silently
+ * dropped, because dropping it would also lose the body text it introduces. `parseHeadingItems`
+ * runs it after every item has been read so nested-subsection errors keep the precedence
+ * they have always had.
+ */
+function rejectUnclaimedItemHeadings(
+  ctx: ParseContext,
+  section: HeadingItemsSection,
+  range: NodeRange,
+  claimed: Set<number>,
+): void {
+  for (const index of headingIndexes(ctx.nodes, range.start, range.end, section.itemDepth)) {
+    if (claimed.has(index)) continue;
+    const node = ctx.nodes[index]!;
+    const heading = headingText(node);
+    if (parseItemHeading(heading, ctx.labels) !== undefined) continue;
+    throw invalidItemHeading(node, heading, ctx.labels[0]!, section.itemDepth);
+  }
+}
+
+/**
  * Walk a heading-item section and return one `ParsedItem` per `####` heading.
  *
  * The result is deliberately shape-neutral: `component.ts` projects it into domain items
@@ -187,7 +212,7 @@ export function parseHeadingItems(
   range: NodeRange,
 ): ParsedItem[] {
   const starts = itemStartIndexes(ctx, section, range);
-  return starts.map((itemStart, order) => {
+  const items = starts.map((itemStart, order) => {
     const node = ctx.nodes[itemStart]!;
     const heading = headingText(node);
     const parsed = parseItemHeading(heading, ctx.labels);
@@ -221,6 +246,8 @@ export function parseHeadingItems(
     if (parsed.title !== undefined) item.title = parsed.title;
     return item;
   });
+  if (section.subsections.length > 0) rejectUnclaimedItemHeadings(ctx, section, range, new Set(starts));
+  return items;
 }
 
 /** Read the raw text of every entry in the first bullet list of a section. */

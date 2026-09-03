@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { actionItemSchema, actionItemDescriptor } from "../../../src/plans/models/actionItem.js";
 import { componentSchema, componentDescriptor } from "../../../src/plans/models/component.js";
 import { isBulletList, isHeadingItems } from "../../../src/plans/models/descriptor.js";
-import { planSchema } from "../../../src/plans/models/plan.js";
+import { itemLabels as planItemLabels, planSchema } from "../../../src/plans/models/plan.js";
 import {
   allHeadingItemSections,
   allProseSections,
@@ -98,6 +98,12 @@ describe("model registry consistency", () => {
     for (const subsection of allProseSections()) {
       expect(itemLabels()).toContain(subsection.rejectNestedLabel);
     }
+  });
+
+  it("derives the item label set in exactly one implementation", () => {
+    // The registry re-exports the plan model's function; a second, parallel derivation
+    // would let parsing and the consistency checks drift apart silently.
+    expect(itemLabels).toBe(planItemLabels);
   });
 
   it("derives node heading matchers from the canonical reference pattern", () => {

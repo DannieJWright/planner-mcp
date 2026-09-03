@@ -146,6 +146,21 @@ describe("PATCH /plans/:reference", () => {
     expect(stored.knowledgeGaps).toEqual([]);
   });
 
+  it("rejects a misspelled knowledge gap label instead of succeeding as a no-op", async () => {
+    const { app, repository, reference } = setup();
+    const response = await app.inject({
+      method: "PATCH",
+      url: `/plans/${reference}`,
+      headers: patchHeaders,
+      payload: `---\nreference: ${reference}\n---\n\n## **COMP-1 - Topic 1**\n\n### **Knowledge Gaps**\n\n#### Knowledge Ga 1.A - Typo heading\n\nNew details.\n`,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({ error: expect.stringContaining("invalid item heading") });
+    const stored = repository.get(reference)!;
+    expect(stored.components[0]!.knowledgeGaps).toEqual(seedPlan().components[0]!.knowledgeGaps);
+  });
+
   it("rejects unknown plans, mismatched references, and malformed documents", async () => {
     const { app, reference } = setup();
     expect((await app.inject({ method: "PATCH", url: "/plans/missing", headers: patchHeaders, payload: `---\nreference: missing\n---\n` })).statusCode).toBe(404);
@@ -325,5 +340,33 @@ describe("PUT /plans reports reference shifts for existing plans", () => {
     expect(body.referenceChanges.shifted).toBe(true);
     expect(body.referenceChanges.changes).toContainEqual({ change: "removed", kind: "component", from: "COMP-2" });
     expect(body.referenceChanges.changes).toContainEqual({ change: "removed", kind: "component", from: "COMP-3" });
+  });
+
+  it("reports renames when a full re-upload changes component order", async () => {
+    const { app, repository, reference } = setup();
+    const swapped = { ...seedPlan(), reference, components: [component(2), component(1), component(3)] };
+    const response = await app.inject({ method: "PUT", url: "/plans", headers: patchHeaders, payload: formatPlanMarkdown(swapped) });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ referenceChanges: { shifted: boolean; changes: Array<Record<string, string>> } }>();
+    expect(body.referenceChanges.shifted).toBe(true);
+    expect(body.referenceChanges.changes).toContainEqual({ change: "renamed", kind: "component", from: "COMP-2", to: "COMP-1" });
+    expect(body.referenceChanges.changes).toContainEqual({ change: "renamed", kind: "component", from: "COMP-1", to: "COMP-2" });
+    expect(body.referenceChanges.changes).toContainEqual({ change: "renamed", kind: "requirements", from: "2.A", to: "1.A" });
+    const stored = repository.get(reference)!;
+    expect(stored.components.map(({ title }) => title)).toEqual(["Topic 2", "Topic 1", "Topic 3"]);
+  });
+
+  it("reports renames and removals when a full re-upload drops the first component", async () => {
+    const { app, reference } = setup();
+    const shrunk = { ...seedPlan(), reference, components: [component(2), component(3)] };
+    const response = await app.inject({ method: "PUT", url: "/plans", headers: patchHeaders, payload: formatPlanMarkdown(shrunk) });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ referenceChanges: { shifted: boolean; changes: Array<Record<string, string>> } }>();
+    expect(body.referenceChanges.shifted).toBe(true);
+    expect(body.referenceChanges.changes).toContainEqual({ change: "renamed", kind: "component", from: "COMP-2", to: "COMP-1" });
+    expect(body.referenceChanges.changes).toContainEqual({ change: "renamed", kind: "component", from: "COMP-3", to: "COMP-2" });
+    expect(body.referenceChanges.changes).toContainEqual({ change: "removed", kind: "component", from: "COMP-1" });
   });
 });

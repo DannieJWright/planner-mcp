@@ -178,6 +178,14 @@ describe("characterization: rejected documents", () => {
       message: "Knowledge Gap 1.A contains more than one `##### Findings` subsection.",
     },
     {
+      name: "knowledge gap section with an invalid stray item heading",
+      mutate: (source) => source.replace(
+        "The persistence layer was a black box.\n\n##### Findings",
+        "The persistence layer was a black box.\n\n#### Random stuff\n\nLost content.\n\n##### Findings",
+      ),
+      message: "invalid item heading `Random stuff`. Expected `#### <Item Type> <reference> - <title>`, for example `#### Requirement 1.A - Upload plans`.",
+    },
+    {
       name: "knowledge gap with a nested Finding heading",
       mutate: (source) => source.replace("##### Findings\n\nThe repository owns", "##### Findings\n\n#### Finding 1.A - nested\n\nThe repository owns"),
       message: "Findings must be direct content under `##### Findings`; remove the separate `Finding 1.A - nested` heading.",
@@ -191,6 +199,19 @@ describe("characterization: rejected documents", () => {
       name: "action item missing a subsection",
       mutate: (source) => source.replace("### Assignees\n\n- Data team\n- Platform team\n\n", ""),
       message: "ACTION-1 is missing required `### Assignees` subsection.",
+    },
+    {
+      // The unified parser rejects unknown and duplicated action-item subsections in strict
+      // mode; the pre-refactor strict parser silently ignored them. Pinned deliberately.
+      name: "unsupported action item subsection",
+      mutate: (source) => source.replace("### Acceptance Criteria\n", "### Nonsense\n"),
+      message: "ACTION-1 contains unsupported `### Nonsense` subsection.",
+    },
+    {
+      // See the unsupported-subsection case above.
+      name: "duplicate action item subsection",
+      mutate: (source) => source.replace("### Assignees\n", "### Assignees\n\n### Assignees\n"),
+      message: "ACTION-1 contains duplicate `### Assignees` subsections.",
     },
     {
       // Action-item status errors are now generated from the descriptor, so they read

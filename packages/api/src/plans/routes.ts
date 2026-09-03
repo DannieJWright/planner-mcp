@@ -2,12 +2,12 @@ import type { FastifyInstance } from "fastify";
 import type { Plan } from "./domain.js";
 import { componentItemSections } from "./models/component.js";
 import { newPlanReference } from "./models/plan.js";
-import { compareItemRefs, formatItemsExcerptMarkdown, formatPlanMarkdown, ingestPlanMarkdown, type ItemExcerptGroup } from "./markdown.js";
+import { compareItemRefs, formatItemsExcerptMarkdown, formatPlanMarkdown, type ItemExcerptGroup } from "./markdown.js";
 import {
   applyPlanPatch,
   diffReferences,
   emptyReferenceChanges,
-  identityProvenance,
+  ingestFullPlan,
   parsePlanPatchMarkdown,
   removePlanComponent,
   type ReferenceChanges,
@@ -47,10 +47,10 @@ export function registerPlanRoutes(app: FastifyInstance, repository: PlanReposit
   app.put<{ Body: string }>("/plans", async (request, reply) => {
     if (typeof request.body !== "string") return reply.code(400).send({ error: "Expected a Markdown request body" });
     try {
-      const { plan, validationFailures } = ingestPlanMarkdown(request.body);
+      const { plan, validationFailures, provenance } = ingestFullPlan(request.body);
       const existing = plan.reference === newPlanReference ? undefined : repository.get(plan.reference);
       const referenceChanges: ReferenceChanges = existing
-        ? diffReferences(existing, plan, identityProvenance(plan))
+        ? diffReferences(existing, plan, provenance)
         : emptyReferenceChanges;
       const reference = repository.save(plan);
       return { reference, validationFailures, referenceChanges };

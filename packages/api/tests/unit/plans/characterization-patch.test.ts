@@ -6,6 +6,7 @@ import {
   applyPlanPatch,
   diffReferences,
   identityProvenance,
+  ingestFullPlan,
   parsePlanPatchMarkdown,
   removePlanComponent,
 } from "../../../src/plans/patch.js";
@@ -109,6 +110,24 @@ describe("characterization: partial document parsing", () => {
       status: "Resolved",
       findings: "Peak is 400 events per second.",
     });
+  });
+
+  it("rejects an item heading that no section label recognizes instead of dropping it", () => {
+    expect(() => parsePlanPatchMarkdown(patchDocument([
+      "## **COMP-1 - Ingestion pipeline**",
+      "",
+      "### **Knowledge Gaps**",
+      "",
+      "#### Knowledge Ga 1.A - Typo heading",
+      "",
+      "New details.",
+      "",
+      "##### Findings",
+      "",
+      "Findings body.",
+    ].join("\n")))).toThrow(
+      "invalid item heading `Knowledge Ga 1.A - Typo heading`. Expected `#### <Item Type> <reference> - <title>`, for example `#### Requirement 1.A - Upload plans`.",
+    );
   });
 
   it("rejects a Status field on item kinds that do not support one", () => {
@@ -359,6 +378,15 @@ describe("characterization: reference diffing", () => {
     const result = removePlanComponent(existing, "COMP-9");
     expect(result.removed).toBe(false);
     expect(result.plan).toBe(existing);
+  });
+
+  it("keeps full-upload provenance aligned to the document's written references", () => {
+    const existing = base();
+    const swappedMarkdown = formatPlanMarkdown({ ...existing, components: [existing.components[1]!, existing.components[0]!] });
+    const { plan, provenance } = ingestFullPlan(swappedMarkdown);
+
+    expect(provenance.components.map((component) => component.originRef)).toEqual(["COMP-2", "COMP-1"]);
+    expect(plan.components.map((component) => component.ref)).toEqual(["COMP-1", "COMP-2"]);
   });
 
   it("builds identity provenance covering every component item bucket", () => {

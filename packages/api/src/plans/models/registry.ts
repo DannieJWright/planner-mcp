@@ -43,15 +43,14 @@ export function allProseSections(): ProseSection[] {
   return allHeadingItemSections().flatMap((section) => section.subsections).filter(isProse);
 }
 
-/** Every singular item label that may begin a `####` item heading. */
-export function itemLabels(): string[] {
-  return [
-    ...new Set([
-      ...allHeadingItemSections().map((section) => section.singularLabel),
-      ...allProseSections().map((subsection) => subsection.rejectNestedLabel),
-    ]),
-  ];
-}
+/**
+ * Every singular item label that may begin a `####` item heading.
+ *
+ * Re-exported from the plan model, which owns the single implementation next to the
+ * collections it derives. The registry cannot host it because models must not import the
+ * registry; a second derivation here is exactly the parallel table this project bans.
+ */
+export { itemLabels } from "./plan.js";
 
 /** Sections whose items are renumbered and whose references are rewritten in prose. */
 export function referenceSections(): Array<HeadingItemsSection<string>> {

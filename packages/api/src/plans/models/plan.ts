@@ -67,8 +67,10 @@ export const planDescriptor: NodeDescriptor = {
  * descriptors this plan owns.
  *
  * Computed on each call rather than captured at module load, so a section registered
- * after startup is recognized. This lives here rather than in the registry so the model
- * files stay free of a dependency on the registry, which imports them.
+ * after startup is recognized. This is the single implementation of that set: it lives
+ * here next to the collections it derives because models must not import the registry,
+ * which imports them; `registry.ts` re-exports this same function for consumers on that
+ * side of the dependency boundary.
  */
 export function itemLabels(): string[] {
   return [

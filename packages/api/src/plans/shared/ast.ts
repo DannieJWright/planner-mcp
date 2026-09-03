@@ -86,25 +86,41 @@ export function contentBetween(markdown: string, nodes: Node[], start: number, h
 
 export type LeadingMetadata = { fields: Record<string, string>; rest: string };
 
+/** A leading status line plus the body text that follows it. */
+export type StatusLine = { status?: string; rest: string };
+
+const statusLinePattern = /^(?:\*\*)?Status:(?:\*\*)?\s*([^\n]+)\s*(?:\n\n|\n)?/i;
+
+/**
+ * Read the leading `**Status:** value` line of a body, or an unbolded `Status: value`
+ * line. Strict documents have always tolerated the unbolded form while partial documents
+ * never did (they read metadata exclusively through `parseLeadingMetadata`, which requires
+ * bold); this is the single shared implementation behind that tolerance. The captured
+ * status is returned exactly as written; callers decide how to normalize it. When no
+ * leading status line exists, the body is returned untouched in `rest`.
+ */
+export function readStatusLine(body: string): StatusLine {
+  const match = body.match(statusLinePattern);
+  if (!match) return { rest: body };
+  return { status: match[1], rest: body.slice(match[0].length).trim() };
+}
+
 /**
  * Split a body into its leading `**Key:** value` metadata block and the remaining prose.
  *
- * `unbolded` names the subset of keys that may also appear without bold markers
- * (`Status: Open`). The strict document parser has always accepted an unbolded status
- * line; the partial-document parser has always required bold. Keeping that difference
- * explicit preserves both behaviors while sharing one implementation.
+ * Only bold markers are recognized here, which is exactly what partial documents require;
+ * the strict parser's tolerance of an unbolded `Status:` line lives in `readStatusLine`,
+ * not in this function.
  */
 export function parseLeadingMetadata(
   body: string,
   allowedKeys: readonly string[],
   context: string,
-  unbolded: readonly string[] = [],
 ): LeadingMetadata {
   const fields: Record<string, string> = {};
   const lines = body.split("\n");
   const isMetadataLine = (value: string): boolean =>
-    /^\*\*[A-Za-z][A-Za-z ]*:\*\*/.test(value)
-    || unbolded.some((key) => new RegExp(`^${key}:`, "i").test(value));
+    /^\*\*[A-Za-z][A-Za-z ]*:\*\*/.test(value);
   let index = 0;
   while (index < lines.length) {
     const line = lines[index]!;

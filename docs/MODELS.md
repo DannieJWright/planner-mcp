@@ -221,9 +221,16 @@ one is a format change, not a refactor.
   fenced code blocks and reports unresolved references found there.
 - Prose may spell a component reference as `COMPONENT 1`; headings may not.
 - A strict document may write `Status: Open` without bold markers. A partial document may
-  not.
+  not; the tolerance is implemented by `readStatusLine` in `shared/ast.ts`, which both
+  status call sites share.
+- Strict documents reject unknown and duplicated `###` subsections inside an action item,
+  matching what strict components and all partial parsing have always done. The unification 
+  into one walker kept the stricter behavior on purpose (pinned in 
+  `characterization-markdown.test.ts`).
 - Sections whose items own nested subsections locate item boundaries by label, so a stray
-  same-depth heading cannot split an item from its subsection.
+  same-depth heading carrying another section's valid label cannot split an item from its
+  subsection and is skipped; a stray heading that no section label recognizes is rejected
+  in both strict and partial mode rather than silently dropped with its body text.
 
 ## Deferred
 

@@ -4,7 +4,7 @@ import { normalizePlan, type PlanIngestResult } from "./models/normalize.js";
 import { acceptanceCriteriaSection, actionItemDescriptor, actionItemSections } from "./models/actionItem.js";
 import { componentDescriptor, componentItemSections, type ComponentItemKey } from "./models/component.js";
 import { isBulletList, isHeadingItems, type HeadingItemsSection, type NodeRange, type ParseContext, type ParsedItem } from "./models/descriptor.js";
-import { createParseContext, planCollections, planPatchableFields } from "./models/plan.js";
+import { createParseContext, parsePlanDocument, planCollections, planPatchableFields } from "./models/plan.js";
 import { locateSections, parseBulletList, parseHeadingItems, resolveStatus } from "./models/section.js";
 import {
   contentBetween,
@@ -136,6 +136,25 @@ export function identityProvenance(plan: Plan): PlanProvenance {
     })),
     actionItems: plan.actionItems.map((action) => ({ originRef: action.ref, title: action.title })),
   };
+}
+
+export type FullUploadResult = PlanIngestResult & { provenance: PlanProvenance };
+
+/**
+ * Parse and normalize a complete re-upload of an existing plan while keeping the nodes'
+ * pre-normalization references.
+ *
+ * A full upload writes the persisted references it downloaded, so the parsed document's
+ * own refs identify which node sits at each position before `normalizePlan()` reassigns
+ * them strictly by array index. Snapshotting identity provenance from that parse keeps it
+ * position-aligned with the normalized plan and lets `diffReferences` report the renames
+ * a reorder or removal causes; snapshotting it from the already-normalized plan would make
+ * every node look like it kept its ref.
+ */
+export function ingestFullPlan(markdown: string): FullUploadResult {
+  const parsed = parsePlanDocument(markdown);
+  const provenance = identityProvenance(parsed);
+  return { ...normalizePlan(parsed), provenance };
 }
 
 /**
