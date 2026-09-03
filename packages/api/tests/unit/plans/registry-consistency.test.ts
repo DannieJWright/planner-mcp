@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { itemStatuses } from "../../../src/plans/domain.js";
+import { decisionStatuses } from "../../../src/plans/models/decision.js";
+import { knowledgeGapStatuses } from "../../../src/plans/models/knowledgeGap.js";
 import { actionItemSchema, actionItemDescriptor } from "../../../src/plans/models/actionItem.js";
 import { componentSchema, componentDescriptor } from "../../../src/plans/models/component.js";
 import { isBulletList, isHeadingItems } from "../../../src/plans/models/descriptor.js";
@@ -78,6 +81,20 @@ describe("model registry consistency", () => {
       expect(section.statuses.length).toBeGreaterThan(0);
       expect(new Set(section.statuses).size).toBe(section.statuses.length);
     }
+  });
+
+  it("keeps the public itemStatuses union in sync with the status-bearing descriptors", () => {
+    // The literal keeps a stable order and shape for the public type; this test is what
+    // ties its values to the descriptors so neither side can drift silently.
+    const declared = new Set<string>([...decisionStatuses, ...knowledgeGapStatuses]);
+    expect(new Set(itemStatuses).size).toBe(itemStatuses.length);
+    expect([...new Set(itemStatuses)].sort()).toEqual([...declared].sort());
+  });
+
+  it("keeps the public itemStatuses union in a stable order", () => {
+    // Callers may rely on the tuple's shape and order; a Set-spread derivation would make
+    // the runtime order depend on whichever descriptor happens to declare a status first.
+    expect([...itemStatuses]).toEqual(["Open", "Decided", "Resolved", "Closed"]);
   });
 
   it("only renumbers references for component item sections", () => {

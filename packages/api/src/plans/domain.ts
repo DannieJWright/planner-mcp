@@ -6,8 +6,6 @@
  * the owning model file, not here.
  */
 import { z } from "zod";
-import { decisionStatuses } from "./models/decision.js";
-import { knowledgeGapStatuses } from "./models/knowledgeGap.js";
 import { textItemSchema } from "./models/textItem.js";
 
 export { textItemSchema, type TextItem } from "./models/textItem.js";
@@ -17,10 +15,14 @@ export { actionItemSchema, actionItemStatuses, type ActionItem } from "./models/
 export { componentSchema, type Component } from "./models/component.js";
 export { planSchema, planStatuses, type Plan, type PlanSummary } from "./models/plan.js";
 
-/** Union of every component item status, retained for callers that accept either kind. */
-export const itemStatuses = [
-  ...new Set<string>([...decisionStatuses, ...knowledgeGapStatuses]),
-] as unknown as readonly ["Open", "Decided", "Resolved", "Closed"];
+/**
+ * Union of every component item status, retained for callers that accept either kind.
+ *
+ * This is an explicit literal rather than a derivation: it is part of the public API with
+ * a stable order and shape by construction, and `registry-consistency.test.ts` keeps its
+ * values in sync with the decision and knowledge-gap descriptors.
+ */
+export const itemStatuses = ["Open", "Decided", "Resolved", "Closed"] as const;
 
 const statusItemSchema = textItemSchema.extend({
   status: z.enum(itemStatuses),

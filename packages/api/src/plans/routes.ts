@@ -128,8 +128,10 @@ export function registerPlanRoutes(app: FastifyInstance, repository: PlanReposit
     });
   };
 
-  // Retrieval sub-resources: one per status-bearing component item section, so adding
-  // such a section adds its retrieval route without touching this file.
+  // Retrieval sub-resources: one per status-bearing component item section present when
+  // this function runs. A section registered later needs no code change here, but its
+  // route exists only on servers constructed afterwards (docs/MODELS.md documents the
+  // limitation; route-registration.test.ts pins it).
   for (const section of componentItemSections) {
     if (section.statuses === null) continue;
     registerItemRoute(

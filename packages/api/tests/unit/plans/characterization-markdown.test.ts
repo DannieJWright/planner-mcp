@@ -178,6 +178,19 @@ describe("characterization: rejected documents", () => {
       message: "Knowledge Gap 1.A contains more than one `##### Findings` subsection.",
     },
     {
+      // Nested-subsection errors must name the item by its full heading text (label, ref, and any
+      // custom title), not just label plus ref. Pinned deliberately.
+      name: "titled knowledge gap missing the Findings subsection",
+      mutate: (source) => source.replace("#### Knowledge Gap 1.A\n", "#### Knowledge Gap 1.A - Persistence mystery\n").replace("Measure peak event volume.\n\n##### Findings\n", "Measure peak event volume.\n"),
+      message: "Knowledge Gap 1.A - Persistence mystery is missing required `##### Findings` subsection.",
+    },
+    {
+      // See the titled-missing-Findings case above.
+      name: "titled knowledge gap with two Findings subsections",
+      mutate: (source) => source.replace("#### Knowledge Gap 1.A\n", "#### Knowledge Gap 1.A - Persistence mystery\n").replace("Measure peak event volume.\n\n##### Findings\n", "Measure peak event volume.\n\n##### Findings\n\n##### Findings\n"),
+      message: "Knowledge Gap 1.A - Persistence mystery contains more than one `##### Findings` subsection.",
+    },
+    {
       name: "knowledge gap section with an invalid stray item heading",
       mutate: (source) => source.replace(
         "The persistence layer was a black box.\n\n##### Findings",

@@ -72,11 +72,15 @@ export function sectionHeading(section: { sectionDepth: number; heading: string;
 /**
  * Locate each nested prose subsection of an item and return the body index at which the
  * item's own details end.
+ *
+ * `itemHeading` is the item's full heading text (label, ref, and any custom title); it is
+ * what missing/duplicate-subsection errors name, so a titled item keeps its title in the
+ * message.
  */
 function readSubsections(
   ctx: ParseContext,
   section: HeadingItemsSection,
-  owner: string,
+  itemHeading: string,
   itemStart: number,
   itemEnd: number,
 ): { bodyEnd: number; subsections: Record<string, string>; present: Set<string> } {
@@ -89,12 +93,12 @@ function readSubsections(
       .filter((index) => headingText(ctx.nodes[index]!) === subsection.heading);
     if (found.length === 0) {
       if (ctx.mode === "strict" && subsection.required) {
-        throw missingSubsection(ctx.nodes[itemStart]!, owner, subsection.depth, subsection.heading);
+        throw missingSubsection(ctx.nodes[itemStart]!, itemHeading, subsection.depth, subsection.heading);
       }
       continue;
     }
     if (found.length > 1) {
-      throw duplicateNestedSubsection(ctx.nodes[found[1]!]!, owner, subsection.depth, subsection.heading);
+      throw duplicateNestedSubsection(ctx.nodes[found[1]!]!, itemHeading, subsection.depth, subsection.heading);
     }
     const start = found[0]!;
     rejectNestedItemHeadings(ctx, subsection, start, itemEnd);
@@ -219,8 +223,10 @@ export function parseHeadingItems(
     if (!parsed) throw invalidItemHeading(node, heading, ctx.labels[0]!, section.itemDepth);
 
     const itemEnd = starts[order + 1] ?? range.end;
+    // Metadata errors name the item by label and ref (as partial documents always did);
+    // nested-subsection errors name it by its full heading text.
     const owner = `${section.singularLabel} ${parsed.ref}`;
-    const { bodyEnd, subsections, present } = readSubsections(ctx, section, owner, itemStart, itemEnd);
+    const { bodyEnd, subsections, present } = readSubsections(ctx, section, heading, itemStart, itemEnd);
     const body = contentBetween(ctx.source, ctx.nodes.slice(0, bodyEnd), itemStart + 1, section.itemDepth);
     const { metadata, details } = readMetadata(ctx, section, owner, body);
 

@@ -208,6 +208,26 @@ describe("characterization: partial document parsing", () => {
     });
   });
 
+  it("rejects a Status metadata field on Acceptance Criteria items", () => {
+    // The wording is generated generically by parseLeadingMetadata and names the section's
+    // allowed fields; pinned deliberately so a future "cleanup" is a visible diff.
+    expect(() => parsePlanPatchMarkdown(patchDocument([
+      "## **ACTION-1 - Validate peak capacity**",
+      "",
+      "**Status:** Done",
+      "",
+      "### Acceptance Criteria",
+      "",
+      "#### Acceptance Criteria A - Updated",
+      "",
+      "**Status:** Open",
+      "",
+      "New body.",
+    ].join("\n")))).toThrow(
+      "Plan Markdown error: Acceptance Criteria A contains unsupported metadata field `Status`. Allowed fields are Delete, Handle.",
+    );
+  });
+
   it("parses frontmatter metadata overrides", () => {
     const patch = parsePlanPatchMarkdown(
       `---\nreference: ${reference}\ntitle: Renamed\ndescription: New description\ntags:\n  - one\nstatus: done\n---\n`,

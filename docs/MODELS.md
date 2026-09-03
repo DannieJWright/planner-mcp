@@ -180,9 +180,13 @@ stays literal in `repository.ts`.
 introduces a new shape, parser and formatter cases at that boundary.
 
 That is the whole change. Parsing, formatting, renumbering, prose reference rewriting,
-patch operations, persistence, and — for a status-bearing section — the HTTP retrieval
-route all pick it up. `tests/integration/plans/extensibility.test.ts` performs exactly this
-procedure at runtime and asserts each of those behaviors.
+patch operations, and persistence pick it up immediately — `extensibility.test.ts` performs
+exactly this procedure at a *runtime*-registered section and asserts each of those
+behaviors. The HTTP retrieval route for a status-bearing section is also derived from the
+descriptor, but it materializes only on servers constructed after the section exists:
+`registerPlanRoutes` iterates the sections once when `createServer` runs, so an already-
+running process serves no such route until it restarts. `route-registration.test.ts` pins
+that timing; changing it is a deliberate decision, not a refactor.
 
 ## Walkthrough: adding a field to an existing model
 
