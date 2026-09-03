@@ -314,12 +314,13 @@ Run (`SYNC_SCRIPT`) with (`PLAN_FILE`). It uploads the complete document, receiv
 ## Phase 3 - Interview Phase
 
 Enter only when the user expressly asks to proceed. This phase refines a plan that has
-already been ingested, then re-ingests it.
+already been ingested, then re-ingests it; it requires Phase 2 (ingest) to have run for
+this plan first. If the plan file was never uploaded, complete Phase 2 before starting here.
 
-The purpose is to resolve ambiguity, establish details about requirements and constraints,
-and prepare the plan for conversion into an implementation plan. The purpose is not to
-establish exact expected code, only to refine the plan into a detailed format that clearly
-describes the expected work to be completed.
+Its purpose is to resolve ambiguity, establish details about requirements and constraints,
+and prepare the plan for conversion into an implementation plan — not to establish exact
+expected code, only to refine the plan into a detailed format that clearly describes the
+expected work to be completed.
 
 1. Ask the user what access scope may be used for this phase before asking anything else. Offer at minimum: no access beyond the plan file, specific files or paths the user names, or the workspace. Record the granted scope and do not exceed it. Absent an explicit grant, the Non-Negotiable Boundaries continue to apply in full.
 2. Re-read (`PLAN_FILE`). This is explicit permission to read that plan file only, unless the user granted a wider scope in step 1.

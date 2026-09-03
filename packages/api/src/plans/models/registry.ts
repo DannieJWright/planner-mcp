@@ -52,9 +52,25 @@ export function allProseSections(): ProseSection[] {
  */
 export { itemLabels } from "./plan.js";
 
-/** Sections whose items are renumbered and whose references are rewritten in prose. */
+/** Every heading-item section declared by one node type, in descriptor order. */
+export function headingItemSections(node: NodeDescriptor): HeadingItemsSection[] {
+  return node.sections.filter(isHeadingItems);
+}
+
+/**
+ * Sections whose items are renumbered and whose references are rewritten in prose.
+ *
+ * Scopes over every node type on purpose: a section registered under an action item with
+ * the renumber role participates in normalization exactly like one declared on a
+ * component, instead of being skipped silently.
+ */
 export function referenceSections(): Array<HeadingItemsSection<string>> {
-  return componentItemSections.filter((section) => section.referenceRole === "renumber");
+  return allHeadingItemSections().filter((section) => section.referenceRole === "renumber");
+}
+
+/** The renumber-role sections declared by one node type. */
+export function referenceSectionsFor(node: NodeDescriptor): Array<HeadingItemsSection<string>> {
+  return headingItemSections(node).filter((section) => section.referenceRole === "renumber");
 }
 
 /** Sections whose aliases only suppress false unresolved-reference reports. */
@@ -62,14 +78,14 @@ export function suppressedReferenceSections(): HeadingItemsSection[] {
   return allHeadingItemSections().filter((section) => section.referenceRole === "suppress");
 }
 
-/** Component item sections that are persisted in the `items` table. */
+/** Every heading-item section that carries a persistence kind, on any node type. */
 export function persistedItemSections(): Array<HeadingItemsSection<string>> {
-  return componentItemSections.filter((section) => section.dbKind !== null);
+  return allHeadingItemSections().filter((section) => section.dbKind !== null);
 }
 
-/** Index of persistence kind to section, built once per read. */
-export function dbKindIndex(): Map<string, HeadingItemsSection<string>> {
-  return new Map(persistedItemSections().map((section) => [section.dbKind!, section]));
+/** The sections declared by one node type that carry a persistence kind. */
+export function persistedItemSectionsFor(node: NodeDescriptor): Array<HeadingItemsSection<string>> {
+  return headingItemSections(node).filter((section) => section.dbKind !== null);
 }
 
 /** Look up any heading-item section by its model key. */
@@ -87,7 +103,7 @@ export function componentSectionByKey(key: string): HeadingItemsSection | undefi
   return componentItemSections.find((section) => section.key === key);
 }
 
-/** Look up a component item section by its persistence kind value. */
+/** Look up any heading-item section by its persistence kind value. */
 export function sectionByDbKind(kind: string): HeadingItemsSection | undefined {
   return persistedItemSections().find((section) => section.dbKind === kind);
 }

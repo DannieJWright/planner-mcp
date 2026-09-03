@@ -32,5 +32,7 @@ describe("idea-planner skill structure", () => {
     const interviewPhase = skill.slice(skill.indexOf("## Phase 3 - Interview Phase"), skill.indexOf("## Output:"));
     expect(interviewPhase).toContain("access scope");
     expect(interviewPhase).toContain("(`SYNC_SCRIPT`)");
+    // The phase must state its precondition instead of assuming the plan was ingested.
+    expect(interviewPhase).toContain("Phase 2");
   });
 });

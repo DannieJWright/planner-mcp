@@ -1,19 +1,20 @@
 /**
  * Reference normalization.
  *
- * After a document is parsed or a patch is merged, every component and item reference is
- * reassigned strictly by array index, and the references appearing in prose are rewritten
- * to match. References that cannot be resolved are left untouched and reported.
+ * After a document is parsed or a patch is merged, every component reference and every
+ * renumber-role section's items — on any node type — are reassigned strictly by array
+ * index, and the references appearing in prose are rewritten to match. References that
+ * cannot be resolved are left untouched and reported.
  *
  * Which sections take part, and under which aliases they may be written in prose, comes
  * entirely from the descriptor registry.
  */
 import { referenceKey, subsectionLabel } from "../shared/refs.js";
-import { acceptanceCriteriaSection } from "./actionItem.js";
+import { actionItemDescriptor } from "./actionItem.js";
 import { componentDescriptor } from "./component.js";
-import { findingsSection } from "./knowledgeGap.js";
+import type { HeadingItemsSection } from "./descriptor.js";
 import type { Plan } from "./plan.js";
-import { referenceSections, suppressedReferenceSections } from "./registry.js";
+import { headingItemSections, referenceSections, referenceSectionsFor, suppressedReferenceSections } from "./registry.js";
 
 export type OrderingValidationFailure = {
   section: string;
@@ -58,14 +59,18 @@ export function normalizePlan(plan: Plan): PlanIngestResult {
     componentNumbers.set(component.ref.slice(refPrefix.length), String(componentNumber));
     component.ref = `${refPrefix}${componentNumber}`;
 
-    for (const section of referenceSections()) {
-      const items = (component as unknown as Record<string, Indexed[]>)[section.key]!;
-      items.forEach((item, itemIndex) => {
-        const newRef = `${componentNumber}.${subsectionLabel(itemIndex)}`;
-        mappings.set(`${section.key}:${referenceKey(item.ref)}`, newRef);
-        item.ref = newRef;
-      });
-    }
+    renumberItems(
+      (component as unknown as Record<string, Indexed[]>),
+      referenceSectionsFor(componentDescriptor),
+      (itemIndex) => `${componentNumber}.${subsectionLabel(itemIndex)}`,
+      mappings,
+    );
+  });
+
+  // Action items keep their own refs but number the items of every renumber-role section
+  // they declare by position, using the bare letter scheme their criteria already use.
+  plan.actionItems.forEach((action) => {
+    renumberItems(action as unknown as Record<string, Indexed[]>, referenceSectionsFor(actionItemDescriptor), subsectionLabel, mappings);
   });
 
   const sections = referenceSections();
@@ -121,27 +126,23 @@ export function normalizePlan(plan: Plan): PlanIngestResult {
   for (const component of plan.components) {
     component.title = rewrite(component.title, component.ref);
     component.description = rewrite(component.description, component.ref);
-    for (const section of sections) {
-      for (const item of (component as unknown as Record<string, Indexed[]>)[section.key]!) {
-        const context = `${section.singularLabel} ${item.ref}`;
-        item.title = rewrite(item.title, context);
-        item.details = rewrite(item.details, context);
-        const record = item as unknown as Record<string, string>;
-        if (findingsSection.key in record) {
-          record[findingsSection.key] = rewrite(record[findingsSection.key]!, context);
-        }
-      }
-    }
+    rewriteItemFields(
+      (component as unknown as Record<string, Indexed[]>),
+      headingItemSections(componentDescriptor),
+      (section, item) => `${section.singularLabel} ${item.ref}`,
+      rewrite,
+    );
   }
 
   for (const action of plan.actionItems) {
     action.title = rewrite(action.title, action.ref);
     action.context = rewrite(action.context, action.ref);
-    for (const criterion of action.acceptanceCriteria) {
-      const context = `${acceptanceCriteriaSection.singularLabel} ${criterion.ref}`;
-      criterion.title = rewrite(criterion.title, context);
-      criterion.details = rewrite(criterion.details, context);
-    }
+    rewriteItemFields(
+      (action as unknown as Record<string, Indexed[]>),
+      headingItemSections(actionItemDescriptor),
+      (section, item) => `${section.singularLabel} ${item.ref}`,
+      rewrite,
+    );
     for (const source of action.triggerSources) {
       source.ref = rewrite(source.ref, action.ref);
       source.title = rewrite(source.title, action.ref);
@@ -150,4 +151,44 @@ export function normalizePlan(plan: Plan): PlanIngestResult {
   }
 
   return { plan, validationFailures: { ordering: failures } };
+}
+
+/** Reassign every item of the node's renumber-role sections and record old-to-new mappings. */
+function renumberItems(
+  record: Record<string, Indexed[]>,
+  sections: Array<HeadingItemsSection<string>>,
+  makeRef: (itemIndex: number) => string,
+  mappings: Map<string, string>,
+): void {
+  for (const section of sections) {
+    const items = record[section.key]!;
+    items.forEach((item, itemIndex) => {
+      const newRef = makeRef(itemIndex);
+      mappings.set(`${section.key}:${referenceKey(item.ref)}`, newRef);
+      item.ref = newRef;
+    });
+  }
+}
+
+/** Rewrite the references in every heading-item section's titles, bodies, and subsections. */
+function rewriteItemFields(
+  record: Record<string, Indexed[]>,
+  sections: HeadingItemsSection[],
+  contextFor: (section: HeadingItemsSection, item: Indexed) => string,
+  rewrite: (value: string, context: string) => string,
+): void {
+  for (const section of sections) {
+    const items = record[section.key]!;
+    for (const item of items) {
+      const context = contextFor(section, item);
+      item.title = rewrite(item.title, context);
+      item.details = rewrite(item.details, context);
+      const fields = item as unknown as Record<string, string>;
+      for (const subsection of section.subsections) {
+        if (subsection.key in fields) {
+          fields[subsection.key] = rewrite(fields[subsection.key]!, context);
+        }
+      }
+    }
+  }
 }

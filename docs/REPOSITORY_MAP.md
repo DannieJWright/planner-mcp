@@ -53,7 +53,7 @@ Scripts are located with the skill so an installed skill remains self-contained.
 5. The script downloads `GET /plans/:reference`; the API reconstructs canonical Markdown from database rows.
 6. MCP `list_plans` calls `GET /plans` and presents metadata to the agent.
 7. On an explicit user deletion request, MCP `delete_plan` calls `DELETE /plans/:reference`; SQLite cascades deletion to components and items.
-8. MCP `upload_plan` calls `PUT /plans` (full) or `PATCH /plans/:reference` (partial). A partial document is parsed by `patch.ts`, merged against the stored plan, reordered, normalized by `markdown.ts`, and saved through the same transactional `PlanRepository.save`.
+8. MCP `upload_plan` calls `PUT /plans` (full) or `PATCH /plans/:reference` (partial). A partial document is parsed and merged against the stored plan by `patch.ts`, then renumbered and prose-rewritten by `models/normalize.ts`, and saved through the same transactional `PlanRepository.save`.
 9. MCP `remove_component` calls `DELETE /plans/:reference/components/:componentRef`, which funnels through the same normalize-then-save-then-diff path as a partial upload, so both report reference changes identically.
 10. MCP `list_open_knowledge_gaps` / `list_open_decisions` call the nested retrieval sub-resources, which filter by status, group by component, and order by canonical reference.
 
@@ -68,7 +68,7 @@ Scripts are located with the skill so an installed skill remains self-contained.
 
 ## Extension Points
 
-- Add a plan section or model field by following `docs/MODELS.md`. A new component subsection is one section descriptor plus its schema field; parsing, formatting, renumbering, patching, persistence, and retrieval routes all follow from the descriptor.
+- Add a plan section or model field by following `docs/MODELS.md`. A new component subsection is one section descriptor plus its schema field; parsing, formatting, renumbering, patching, persistence, and retrieval routes all follow from the descriptor. A heading-item section on another node type is parsed, formatted, and normalized the same way but persists only through a table it declares itself.
 - Never spell a section heading, singular item label, reference prefix, status value, or persistence kind outside the descriptor that declares it. `source-hygiene.test.ts` enforces this.
 - Add REST operations for plans through `plans/routes.ts`; keep `server.ts` document-type agnostic and keep persistence out of route handlers.
 - Add MCP tools through `packages/mcp/src/server.ts` and transport behavior through `api-client.ts`.

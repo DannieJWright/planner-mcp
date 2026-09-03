@@ -179,11 +179,23 @@ stays literal in `repository.ts`.
 **5. Add tests.** At minimum a round-trip case in the golden corpus and, if the section
 introduces a new shape, parser and formatter cases at that boundary.
 
-That is the whole change. Parsing, formatting, renumbering, prose reference rewriting,
-patch operations, and persistence pick it up immediately — `extensibility.test.ts` performs
-exactly this procedure at a *runtime*-registered section and asserts each of those
-behaviors. The HTTP retrieval route for a status-bearing section is also derived from the
-descriptor, but it materializes only on servers constructed after the section exists:
+That is the whole change — for a **component** subsection. Parsing, formatting, renumbering,
+prose reference rewriting, patch operations, and persistence pick it up immediately;
+`extensibility.test.ts` performs exactly this procedure at a *runtime*-registered section
+and asserts each of those behaviors.
+
+The walkthrough is scoped to components because the shared `items` table joins to
+components by foreign key. A heading-item section declared on another node type — today, an
+action item — still gets parsing, formatting, and reference normalization automatically:
+its items are renumbered by position with the bare letter scheme that node already uses,
+and prose references rewrite through its aliases (`action-section-normalization.test.ts`
+pins this). It persists only if you give it its own table: add DDL in `repository.ts` plus
+the matching save/get row mapping. The registry aggregates never filter by node type; they
+hand every consumer every section that declares the renumber role or a persistence kind, so
+nothing is skipped silently just because a section lives on another node.
+
+The HTTP retrieval route for a status-bearing section is also derived from the descriptor,
+but it materializes only on servers constructed after the section exists:
 `registerPlanRoutes` iterates the sections once when `createServer` runs, so an already-
 running process serves no such route until it restarts. `route-registration.test.ts` pins
 that timing; changing it is a deliberate decision, not a refactor.
@@ -206,6 +218,11 @@ that timing; changing it is a deliberate decision, not a refactor.
   to `registry.ts`; do not hand-maintain a second list.
 - Registry aggregates are computed on demand, not captured at module load, so a
   runtime-registered section stays visible. Preserve that.
+- Reference normalization is node-generic: any heading-item section on any node with the
+  `renumber` role is renumbered by position and rewritten in prose (components number items
+  `<n>.<letter>`; action items use bare letters). The shared `items` table stores
+  component-owned sections only; a persisted section on another node type needs its own
+  table, DDL, and row mapping.
 - A parent model never reimplements a child's parsing. It delegates to the child model or
   to the section walker.
 - Parse error messages are built in `shared/errors.ts` from descriptor values. Do not

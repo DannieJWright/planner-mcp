@@ -3,8 +3,8 @@ import { DatabaseSync } from "node:sqlite";
 import { planSchema, type ActionItem, type Component, type Plan, type PlanSummary, type TextItem } from "./domain.js";
 import type { ItemRowValues } from "./models/descriptor.js";
 import { newPlanReference, planRefPrefix } from "./models/plan.js";
-import { componentItemSections } from "./models/component.js";
-import { dbKindIndex, persistedItemSections } from "./models/registry.js";
+import { componentDescriptor } from "./models/component.js";
+import { persistedItemSectionsFor } from "./models/registry.js";
 
 type PlanRow = {
   reference: string;
@@ -132,8 +132,11 @@ export class PlanRepository {
       `);
       plan.components.forEach((component, componentPosition) => {
         const result = insertComponent.run(reference, component.ref, component.title, component.description, componentPosition);
+        // The `items` table joins to components by foreign key, so only sections owned by
+        // a component can be stored in it here. A heading-item section on another node type
+        // that must persist declares its own table and row mapping (see docs/MODELS.md).
         const record = component as unknown as Record<string, Array<Record<string, unknown>>>;
-        for (const section of persistedItemSections()) {
+        for (const section of persistedItemSectionsFor(componentDescriptor)) {
           record[section.key]!.forEach((item, position) => {
             const values = section.model.toRow(item);
             const inserted = insertItem.run(
@@ -195,14 +198,17 @@ export class PlanRepository {
     const findingsStatement = this.database.prepare(
       "SELECT ref, details FROM knowledge_gap_findings WHERE knowledge_gap_id = ? ORDER BY position",
     );
-    const sectionsByKind = dbKindIndex();
+    // Rows in `items` can only carry the persistence kinds of sections owned by a
+    // component; anything else is unknown to this table and reported as such.
+    const persistedSections = persistedItemSectionsFor(componentDescriptor);
+    const sectionsByKind = new Map(persistedSections.map((section) => [section.dbKind!, section]));
     const components = componentRows.map((componentRow): Component => {
       const record: Record<string, unknown> = {
         ref: componentRow.ref,
         title: componentRow.title,
         description: componentRow.description,
       };
-      for (const section of componentItemSections) record[section.key] = [];
+      for (const section of persistedSections) record[section.key] = [];
 
       const items = this.database
         .prepare("SELECT id, kind, ref, title, details, status FROM items WHERE component_id = ? ORDER BY kind, position")

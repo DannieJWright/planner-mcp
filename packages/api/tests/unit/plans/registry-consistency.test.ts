@@ -1,11 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { itemStatuses } from "../../../src/plans/domain.js";
 import { decisionStatuses } from "../../../src/plans/models/decision.js";
 import { knowledgeGapStatuses } from "../../../src/plans/models/knowledgeGap.js";
-import { actionItemSchema, actionItemDescriptor } from "../../../src/plans/models/actionItem.js";
+import { actionItemSchema, actionItemDescriptor, actionItemSections } from "../../../src/plans/models/actionItem.js";
 import { componentSchema, componentDescriptor } from "../../../src/plans/models/component.js";
 import { isBulletList, isHeadingItems } from "../../../src/plans/models/descriptor.js";
 import { itemLabels as planItemLabels, planSchema } from "../../../src/plans/models/plan.js";
+import { textSection } from "../../../src/plans/models/textItem.js";
 import {
   allHeadingItemSections,
   allProseSections,
@@ -13,9 +14,13 @@ import {
   componentItemSections,
   componentSectionByHeading,
   componentSectionByKey,
+  headingItemSections,
   itemLabels,
   nodeDescriptors,
   persistedItemSections,
+  persistedItemSectionsFor,
+  referenceSections,
+  referenceSectionsFor,
   sectionByDbKind,
 } from "../../../src/plans/models/registry.js";
 import { canonicalRefPattern, refHeadingPattern, refHeadingPrefix } from "../../../src/plans/shared/refs.js";
@@ -97,11 +102,20 @@ describe("model registry consistency", () => {
     expect([...itemStatuses]).toEqual(["Open", "Decided", "Resolved", "Closed"]);
   });
 
-  it("only renumbers references for component item sections", () => {
+  it("covers every declared renumber-role section through the node-scoped views", () => {
+    // The generic aggregate is the union of what each node owns, so a section registered
+    // under any node type participates in renumbering instead of being skipped silently.
+    const fromNodes = nodeDescriptors.flatMap((node) => referenceSectionsFor(node));
+    expect(fromNodes).toEqual(referenceSections());
     for (const section of allHeadingItemSections()) {
       if (section.referenceRole !== "renumber") continue;
-      expect(componentItemSections).toContain(section);
+      expect(referenceSections()).toContain(section);
     }
+  });
+
+  it("keeps the generic persistence aggregate equal to every node's persisted sections", () => {
+    const fromNodes = nodeDescriptors.flatMap((node) => persistedItemSectionsFor(node));
+    expect(fromNodes).toEqual(persistedItemSections());
   });
 
   it("gives every reference-bearing section at least one alias", () => {
@@ -164,6 +178,54 @@ describe("model registry consistency", () => {
       for (const subsection of section.subsections) {
         expect(subsection.depth).toBeGreaterThan(section.itemDepth);
       }
+    }
+  });
+});
+
+/**
+ * The reference and persistence aggregates must not be restricted to component sections.
+ * A heading-item section registered under any node type with a renumber role or a
+ * persistence kind is picked up by every consumer of these lookups, instead of being
+ * silently skipped because it does not belong to `componentItemSections`.
+ */
+describe("reference and persistence aggregates across node types", () => {
+  const milestonesSection = textSection({
+    key: "milestones",
+    heading: "Milestones",
+    singularLabel: "Milestone",
+    aliases: ["milestones?", "ms"],
+    dbKind: "milestone",
+  });
+
+  function register(): void {
+    actionItemSections.push(milestonesSection as unknown as typeof actionItemSections[number]);
+  }
+
+  afterEach(() => {
+    const index = actionItemSections.indexOf(milestonesSection as unknown as typeof actionItemSections[number]);
+    if (index !== -1) actionItemSections.splice(index, 1);
+  });
+
+  it("includes a renumber-role section registered under an action item", () => {
+    register();
+    expect(referenceSections()).toContain(milestonesSection);
+    expect(persistedItemSections()).toContain(milestonesSection);
+  });
+
+  it("scopes the per-node views to their owning node only", () => {
+    register();
+    expect(headingItemSections(actionItemDescriptor)).toContain(milestonesSection);
+    expect(referenceSectionsFor(actionItemDescriptor)).toContain(milestonesSection);
+    expect(persistedItemSectionsFor(actionItemDescriptor)).toContain(milestonesSection);
+    expect(headingItemSections(componentDescriptor)).not.toContain(milestonesSection);
+    expect(referenceSectionsFor(componentDescriptor)).not.toContain(milestonesSection);
+    expect(persistedItemSectionsFor(componentDescriptor)).not.toContain(milestonesSection);
+  });
+
+  it("keeps every declared section visible through the per-node views", () => {
+    for (const node of [componentDescriptor, actionItemDescriptor]) {
+      const owned = node.sections.filter(isHeadingItems);
+      expect(headingItemSections(node)).toEqual(owned);
     }
   });
 });

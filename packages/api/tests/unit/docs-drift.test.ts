@@ -85,4 +85,17 @@ describe("documentation drift", () => {
       expect(documents).not.toContain(stale);
     }
   });
+
+  it("attributes partial-document normalization to models/normalize.ts in the repository map", () => {
+    // Normalization (renumbering and prose rewriting) lives in models/normalize.ts; a
+    // runtime-flow step that names another module for it is stale documentation.
+    const steps = repositoryMap.split("\n").filter((line) => /^\d+\./.test(line));
+    const partialStep = steps.find((step) => step.includes("partial document"));
+    expect(partialStep, "the runtime flow must describe the partial-document path").toBeDefined();
+    expect(partialStep!).toContain("`models/normalize.ts`");
+  });
+
+  it("ends repository dotfiles with a trailing newline", () => {
+    expect(read(".gitignore")).toMatch(/\n$/);
+  });
 });
