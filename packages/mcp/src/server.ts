@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { decisionStatuses, knowledgeGapStatuses } from "@planner/api";
 import { z } from "zod";
 import { PlannerApiClient, type ItemQueryResult, type PlanWriteResult, type ReferenceChange } from "./api-client.js";
 
@@ -168,8 +169,8 @@ export function createMcpServer(client: PlannerClient = new PlannerApiClient()):
     );
   };
 
-  registerRetrievalTool("list_open_knowledge_gaps", "knowledge gaps", ["Open", "Resolved", "Closed"], (reference, options) => client.listKnowledgeGaps(reference, options));
-  registerRetrievalTool("list_open_decisions", "decisions", ["Open", "Decided", "Closed"], (reference, options) => client.listDecisions(reference, options));
+  registerRetrievalTool("list_open_knowledge_gaps", "knowledge gaps", knowledgeGapStatuses, (reference, options) => client.listKnowledgeGaps(reference, options));
+  registerRetrievalTool("list_open_decisions", "decisions", decisionStatuses, (reference, options) => client.listDecisions(reference, options));
 
   return server;
 }

@@ -7,8 +7,8 @@ import { createMcpServer } from "../../src/server.js";
 
 /**
  * Cross-package vocabulary consistency: the retrieval tools' status enums must stay in lockstep with
- * the API descriptors that own those values. The MCP package deliberately has no runtime dependency on
- * @planner/api (it talks to it through REST), so this test is what keeps the two copies from drifting.
+ * the API descriptors that own those values. `server.ts` imports those arrays from @planner/api; this
+ * test verifies they surface unchanged through the generated tool schemas.
  */
 
 const noopClient = {
