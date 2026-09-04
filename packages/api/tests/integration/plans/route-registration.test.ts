@@ -7,9 +7,11 @@ import { createServer } from "../../../src/server.js";
 
 /**
  * Pins the route-registration timing documented in docs/MODELS.md: retrieval routes are
- * registered when `createServer` runs, so a status-bearing section registered at runtime
- * gets parse/normalize/persistence support immediately but its HTTP route only on the next
- * server construction. Changing that behavior is an explicit decision, not a refactor.
+ * registered when `createServer` runs. This test adds a status-bearing section to the live
+ * registry inside its own process (a testing technique; there is no runtime registration
+ * feature) and shows it gets parse/normalize/persistence support immediately but its HTTP
+ * route only on the next server construction. Changing that behavior is an explicit decision,
+ * not a refactor.
  */
 const probeSection = {
   ...decisionsSection,

@@ -162,6 +162,11 @@ export class PlanRepository {
           });
         }
       });
+      // TODO(action-items): action-item section persistence is hard-coded per table below,
+      // not descriptor-driven like component items. A heading-item section registered on an
+      // action item with a dbKind shows up in persistedItemSections() but is silently dropped
+      // here and on read-back; making it persist needs its own DDL plus save/get row mapping,
+      // or this block generalized the way component persistence already is (docs/MODELS.md).
       const insertAction = this.database.prepare(`
         INSERT INTO action_items(plan_reference, ref, title, status, context, position)
         VALUES (?, ?, ?, ?, ?, ?)

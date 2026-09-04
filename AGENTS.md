@@ -7,7 +7,7 @@ Read `README.md` and `docs/REPOSITORY_MAP.md` before changing package boundaries
 ## Invariants
 
 - `packages/api/src/plans/models/` holds the authoritative model definitions. `plans/domain.ts` is a re-export shim; do not add schemas to it.
-- A section heading, singular item label, reference prefix, status value, persistence kind, or patch metadata name is declared in exactly one descriptor and never re-spelled at a call site.
+- A section heading, singular item label, reference prefix, status value, persistence kind, or patch metadata name is declared in exactly one descriptor and never re-spelled at a call site, in any package. Cross-package consumers import those values from `@planner/api` instead of re-declaring them.
 - Plan-specific code belongs under `packages/api/src/plans/`. Top-level modules such as `server.ts` stay document-type agnostic and delegate to feature folders.
 - A parent model never reimplements a child model's parsing; it delegates to the child or to the shared section walker.
 - Markdown input must be parsed by a Markdown parser, not regular expressions over the whole document. Narrow heading validation may use regular expressions after AST parsing.
@@ -26,6 +26,10 @@ Read `README.md` and `docs/REPOSITORY_MAP.md` before changing package boundaries
 - Reference rewriting is centralized in `packages/api/src/plans/models/normalize.ts` and driven by the descriptor registry. A new reference-bearing section declares its own `aliases` and `referenceRole`; nothing else needs editing for its references to be renumbered and rewritten.
 - Add parser, formatter, API, and round-trip tests whenever a new reference-bearing section is introduced. Unknown references should remain unchanged and be reported through `validationFailures.ordering`.
 - Follow the walkthrough in `docs/MODELS.md` when adding a section or a model field.
+
+## Documentation
+
+- Docs describe the current state of the project only. Do not explain legacy behavior, previous implementations, or how behavior changed over time (for example, avoid phrasing like "matching what X has always done"). If a behavior is new or deliberate, document it as current fact without narrating its history.
 
 ## Commands
 

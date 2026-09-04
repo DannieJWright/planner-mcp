@@ -69,7 +69,7 @@ Scripts are located with the skill so an installed skill remains self-contained.
 ## Extension Points
 
 - Add a plan section or model field by following `docs/MODELS.md`. A new component subsection is one section descriptor plus its schema field; parsing, formatting, renumbering, patching, persistence, and retrieval routes all follow from the descriptor. A heading-item section on another node type is parsed, formatted, and normalized the same way but persists only through a table it declares itself.
-- Never spell a section heading, singular item label, reference prefix, status value, or persistence kind outside the descriptor that declares it. `source-hygiene.test.ts` enforces this.
+- Never spell a section heading, singular item label, reference prefix, status value, or persistence kind outside the descriptor that declares it.
 - Add REST operations for plans through `plans/routes.ts`; keep `server.ts` document-type agnostic and keep persistence out of route handlers.
 - Add MCP tools through `packages/mcp/src/server.ts` and transport behavior through `api-client.ts`.
 - Node movement must happen only in `patch.ts`; `normalizePlan()` in `plans/models/normalize.ts` assigns references strictly by array index, and reference-change diffing depends on that alignment.
@@ -81,7 +81,7 @@ Scripts are located with the skill so an installed skill remains self-contained.
 
 | Layer | Evidence |
 |---|---|
-| Unit | Markdown parsing, classification field mapping, canonical round-trip, partial-document parsing, and the patch/reorder/reference-diff engine. Under `tests/unit/plans/`, plus registry-consistency, source-hygiene, and characterization suites that pin the format byte for byte |
-| Integration | SQLite create/update/retrieve, Fastify route behavior, partial upload, component removal, and item retrieval. Under `tests/integration/plans/`, plus an extensibility suite that registers a section at runtime and asserts every layer picks it up |
+| Unit | Markdown parsing, classification field mapping, canonical round-trip, partial-document parsing, and the patch/reorder/reference-diff engine. Under `tests/unit/plans/`, plus registry-consistency and characterization suites that pin the format byte for byte |
+| Integration | SQLite create/update/retrieve, Fastify route behavior, partial upload, component removal, and item retrieval. Under `tests/integration/plans/`, plus an extensibility suite that adds a section to the live registry inside its own process and asserts every layer picks it up |
 | MCP integration | REST client errors, destructive tool metadata, and MCP in-memory transport tool invocation |
 | End-to-end | Real HTTP listener plus shell upload/download/sync scripts |

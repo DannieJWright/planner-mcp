@@ -102,11 +102,12 @@ an error), and `requiredForStatuses` (statuses that require the body to be non-e
 
 ## Node descriptors
 
-`plan`, `component`, and `actionItem` each carry a `NodeDescriptor`. The important
-invariant is that `refPattern`, the heading matchers, the dispatch prefilters, and the
-`New` placeholder are all derived from a single `refPrefix` by `shared/refs.ts`. Never
-write a `COMP-` or `ACTION-` regex anywhere else — that is precisely how the old heading
-matchers drifted into accepting `COMPONENT`, which the schema rejected.
+`plan`, `component`, and `actionItem` each carry a `NodeDescriptor`. Components and action
+items are numbered nodes: their heading matchers, dispatch prefilters, and `<PREFIX>New`
+placeholder are all derived from a single `refPrefix` by `shared/refs.ts`. The plan root is
+not numbered — its reference is an opaque identifier minted by the server on first save.
+Never write a `COMP-` or `ACTION-` regex anywhere else; every matcher derives from the
+prefix, so any heading spelling a prefilter accepts is a spelling the schema accepts.
 
 ## The item model contract
 
@@ -181,7 +182,8 @@ introduces a new shape, parser and formatter cases at that boundary.
 
 That is the whole change — for a **component** subsection. Parsing, formatting, renumbering,
 prose reference rewriting, patch operations, and persistence pick it up immediately;
-`extensibility.test.ts` performs exactly this procedure at a *runtime*-registered section
+`extensibility.test.ts` exercises exactly this procedure by adding a section to the live
+registry inside the test process (a testing technique, not a supported extension mechanism)
 and asserts each of those behaviors.
 
 The walkthrough is scoped to components because the shared `items` table joins to
@@ -191,8 +193,8 @@ its items are renumbered by position with the bare letter scheme that node alrea
 and prose references rewrite through its aliases (`action-section-normalization.test.ts`
 pins this). It persists only if you give it its own table: add DDL in `repository.ts` plus
 the matching save/get row mapping. The registry aggregates never filter by node type; they
-hand every consumer every section that declares the renumber role or a persistence kind, so
-nothing is skipped silently just because a section lives on another node.
+hand every consumer every section that declares the renumber role or a persistence kind —
+storage is the one layer that scopes itself (see the action-item note in `repository.ts`).
 
 The HTTP retrieval route for a status-bearing section is also derived from the descriptor,
 but it materializes only on servers constructed after the section exists:
@@ -212,12 +214,12 @@ that timing; changing it is a deliberate decision, not a refactor.
 ## Rules
 
 - A section heading, singular label, reference prefix, status value, or persistence kind is
-  written in exactly one file: the descriptor that declares it. `source-hygiene.test.ts`
-  enforces this.
+  written in exactly one file: the descriptor that declares it.
 - No parallel correspondence tables. If you need a view over the descriptors, add a lookup
   to `registry.ts`; do not hand-maintain a second list.
-- Registry aggregates are computed on demand, not captured at module load, so a
-  runtime-registered section stays visible. Preserve that.
+- Registry aggregates are computed on demand, not captured at module load; the extensibility
+  suite relies on this by mutating the section lists inside its own process. Preserve that:
+  never snapshot an aggregate into a module-level constant.
 - Reference normalization is node-generic: any heading-item section on any node with the
   `renumber` role is renumbered by position and rewritten in prose (components number items
   `<n>.<letter>`; action items use bare letters). The shared `items` table stores
@@ -229,10 +231,10 @@ that timing; changing it is a deliberate decision, not a refactor.
   inline a heading string into an error.
 - All mdast access goes through `shared/ast.ts`.
 
-## Known deliberate behaviors
+## Deliberate behaviors
 
-These are preserved on purpose and pinned by `characterization-markdown.test.ts`. Changing
-one is a format change, not a refactor.
+The following behaviors are intentional and pinned by `characterization-markdown.test.ts`.
+Changing one is a format change, not a refactor.
 
 - A knowledge gap with no findings still renders an empty `##### Findings` heading.
 - An action item with empty subsections renders blank bodies between its headings.
@@ -245,9 +247,7 @@ one is a format change, not a refactor.
   not; the tolerance is implemented by `readStatusLine` in `shared/ast.ts`, which both
   status call sites share.
 - Strict documents reject unknown and duplicated `###` subsections inside an action item,
-  matching what strict components and all partial parsing have always done. The unification 
-  into one walker kept the stricter behavior on purpose (pinned in 
-  `characterization-markdown.test.ts`).
+  exactly as they do inside a component; partial parsing rejects them too.
 - Sections whose items own nested subsections locate item boundaries by label, so a stray
   same-depth heading carrying another section's valid label cannot split an item from its
   subsection and is skipped; a stray heading that no section label recognizes is rejected

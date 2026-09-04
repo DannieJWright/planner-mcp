@@ -11,8 +11,9 @@ import { z } from "zod";
  * one section descriptor plus its schema field. Parsing, formatting, patching,
  * normalization, and persistence all pick it up with no further edits.
  *
- * The section is registered at runtime and removed afterwards so the rest of the suite
- * sees the real registry.
+ * The section is added to the live registry inside this test process (a testing technique;
+ * there is no runtime registration feature) and removed afterwards so the rest of the
+ * suite sees the real registry.
  */
 const risksSection = textSection({
   key: "risks",

@@ -78,7 +78,13 @@ export function suppressedReferenceSections(): HeadingItemsSection[] {
   return allHeadingItemSections().filter((section) => section.referenceRole === "suppress");
 }
 
-/** Every heading-item section that carries a persistence kind, on any node type. */
+/**
+ * Every heading-item section that carries a persistence kind, on any node type.
+ *
+ * TODO(action-items): advisory view only — PlanRepository persists component-owned sections;
+ * a non-component dbKind section appears here but is not stored until it gets its own table
+ * and row mapping (see the matching note in repository.ts).
+ */
 export function persistedItemSections(): Array<HeadingItemsSection<string>> {
   return allHeadingItemSections().filter((section) => section.dbKind !== null);
 }
