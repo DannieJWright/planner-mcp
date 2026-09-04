@@ -48,6 +48,9 @@ export function registerPlanRoutes(app: FastifyInstance, repository: PlanReposit
     if (typeof request.body !== "string") return reply.code(400).send({ error: "Expected a Markdown request body" });
     try {
       const { plan, validationFailures, provenance } = ingestFullPlan(request.body);
+      if (plan.reference !== newPlanReference && !repository.get(plan.reference)) {
+        return reply.code(404).send({ error: "Plan not found" });
+      }
       const existing = plan.reference === newPlanReference ? undefined : repository.get(plan.reference);
       const referenceChanges: ReferenceChanges = existing
         ? diffReferences(existing, plan, provenance)

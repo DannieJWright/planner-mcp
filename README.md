@@ -82,7 +82,7 @@ Example local use in opencode.json/opencode.jsonc
 | `GET` | `/plans/:reference/knowledge-gaps` | Knowledge gaps for one plan, grouped by component |
 | `GET` | `/plans/:reference/decisions` | Decisions for one plan, grouped by component |
 
-`PUT /plans` requires `Content-Type: text/markdown`. A frontmatter reference of `New` creates a UUID-backed `PLAN-...` reference. Any other reference updates that plan transactionally.
+`PUT /plans` requires `Content-Type: text/markdown`. A frontmatter reference of `New` creates a UUID-backed `PLAN-...` reference; any other reference must already be persisted, otherwise the upload is rejected with 404. Updates are transactional.
 
 Write responses have the shape `{ "reference": "...", "validationFailures": { "ordering": [] }, "referenceChanges": { "shifted": false, "changes": [] } }`. Ordering failures identify unresolved reference-like text by its normalized containing section; unresolved text is preserved in the saved plan.
 

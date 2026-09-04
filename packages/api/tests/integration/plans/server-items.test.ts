@@ -323,6 +323,28 @@ Measured.
   });
 });
 
+describe("PUT /plans rejects unknown references", () => {
+  it("returns 404 and stores nothing when a full upload carries a reference that was never persisted", async () => {
+    const repository = new PlanRepository(":memory:");
+    const app = createServer({ repository });
+    resources.push({ app, repository });
+    const unknown = { ...seedPlan(), reference: "PLAN-999" };
+    const response = await app.inject({ method: "PUT", url: "/plans", headers: patchHeaders, payload: formatPlanMarkdown(unknown) });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "Plan not found" });
+    expect(repository.list()).toHaveLength(0);
+  });
+
+  it("still creates a plan when the frontmatter reference is New", async () => {
+    const repository = new PlanRepository(":memory:");
+    const app = createServer({ repository });
+    resources.push({ app, repository });
+    const response = await app.inject({ method: "PUT", url: "/plans", headers: patchHeaders, payload: formatPlanMarkdown(seedPlan()) });
+    expect(response.statusCode).toBe(200);
+    expect(repository.list()).toHaveLength(1);
+  });
+});
+
 describe("PUT /plans reports reference shifts for existing plans", () => {
   it("returns an empty change set when creating a plan", async () => {
     const repository = new PlanRepository(":memory:");
