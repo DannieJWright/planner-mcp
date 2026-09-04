@@ -26,7 +26,7 @@ See COMP-2 for the retrieval half.
 
 #### Requirement 1.A
 
-Uploads must accept `text/markdown` and `text/plain` bodies.
+Uploads must accept `text/markdown` and `text/plain` bodies. Accented text (café, naïve) and CJK (数据) survive byte-offset slicing.
 
 #### Requirement 1.B - Accept fenced code in details
 
@@ -101,7 +101,7 @@ The persistence layer was a black box.
 
 ##### Findings
 
-The repository owns every direct database access.
+The repository owns every direct database access (including UTF-8 identifiers such as données and 存储).
 
 Findings may span multiple paragraphs and contain `inline code`, and may reference Requirement 1.A.
 

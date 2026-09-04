@@ -43,7 +43,7 @@ describe("characterization: canonical Markdown encoding", () => {
   it("preserves multi-paragraph findings", () => {
     const gap = parsePlanMarkdown(golden).components[0]!.knowledgeGaps[1]!;
     expect(gap.findings).toBe(
-      "The repository owns every direct database access.\n\nFindings may span multiple paragraphs and contain `inline code`, and may reference Requirement 1.A.",
+      "The repository owns every direct database access (including UTF-8 identifiers such as données and 存储).\n\nFindings may span multiple paragraphs and contain `inline code`, and may reference Requirement 1.A.",
     );
   });
 
@@ -308,7 +308,7 @@ describe("item boundary rules", () => {
     );
     const gap = parsePlanMarkdown(source).components[0]!.knowledgeGaps[1]!;
     expect(gap.status).toBe("Resolved");
-    expect(gap.findings).toContain("The repository owns every direct database access.");
+    expect(gap.findings).toContain("The repository owns every direct database access (including UTF-8 identifiers such as données and 存储).");
   });
 
   it("still rejects a nested Finding item heading inside the Findings prose", () => {

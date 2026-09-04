@@ -8,9 +8,12 @@ import type { Plan } from "../../src/plans/domain.js";
  * Coverage targets:
  * - two components, so component renumbering and `<component>.<letters>` refs are exercised
  * - every component section populated, with more than one item in several of them
- * - every allowed status value for decisions, knowledge gaps, action items, and the plan
+ * - every allowed status value for decisions, knowledge gaps, and action items; the plan
+ *   frontmatter here uses `In Progress`, while the sample-plan fixture exercises `Draft`
  * - fenced code blocks, inline code, bold/italic, nested lists, tables, and blockquotes
  *   inside item details, so raw-source extraction is pinned
+ * - non-ASCII text in titles and details, so byte-offset slicing is exercised across
+ *   multi-byte characters
  * - a fenced code block containing text that looks like a plan heading
  * - resolved and open knowledge gaps, including multi-paragraph findings
  * - canonical cross references in prose that normalization rewrites to themselves
@@ -31,7 +34,7 @@ export const maximalPlan: Plan = {
         {
           ref: "1.A",
           title: "Requirement 1.A",
-          details: "Uploads must accept `text/markdown` and `text/plain` bodies.",
+          details: "Uploads must accept `text/markdown` and `text/plain` bodies. Accented text (café, naïve) and CJK (数据) survive byte-offset slicing.",
         },
         {
           ref: "1.B",
@@ -111,7 +114,7 @@ export const maximalPlan: Plan = {
           status: "Resolved",
           details: "The persistence layer was a black box.",
           findings: [
-            "The repository owns every direct database access.",
+            "The repository owns every direct database access (including UTF-8 identifiers such as données and 存储).",
             "",
             "Findings may span multiple paragraphs and contain `inline code`, and may reference Requirement 1.A.",
           ].join("\n"),

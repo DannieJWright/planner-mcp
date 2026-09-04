@@ -75,7 +75,7 @@ describe("characterization: persistence round trip", () => {
       .all() as unknown as Array<{ ref: string; title: string; details: string; position: number }>;
     expect(rows).toHaveLength(4);
     expect(rows.every((row) => row.ref === "findings" && row.title === "Findings" && row.position === 0)).toBe(true);
-    expect(rows[1]!.details).toContain("The repository owns every direct database access.");
+    expect(rows[1]!.details).toContain("The repository owns every direct database access (including UTF-8 identifiers such as données and 存储).");
   });
 
   it("persists the six item kinds under their snake_case names", () => {
