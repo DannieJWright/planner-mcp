@@ -3,6 +3,7 @@ import { planStatuses, type ActionItem, type Component, type Plan, type TextItem
 import { normalizePlan, type PlanIngestResult } from "./models/normalize.js";
 import { acceptanceCriteriaSection, actionItemDescriptor, actionItemSections } from "./models/actionItem.js";
 import { componentDescriptor, componentItemSections, type ComponentItemKey } from "./models/component.js";
+import { patchFieldNames } from "./models/descriptor.js";
 import { isBulletList, isHeadingItems, type HeadingItemsSection, type NodeRange, type ParseContext, type ParsedItem } from "./models/descriptor.js";
 import { createParseContext, parsePlanDocument, planCollections, planPatchableFields } from "./models/plan.js";
 import { locateSections, parseBulletList, parseHeadingItems, resolveStatus } from "./models/section.js";
@@ -279,7 +280,7 @@ function toItemPatch(parsed: ParsedItem, section: HeadingItemsSection): ItemPatc
   const patch: ItemPatch = {
     kind: section.key as ComponentItemKey,
     ref: parsed.ref,
-    delete: parsed.metadata.Delete === undefined ? false : parseBoolean(parsed.metadata.Delete, "Delete", context),
+    delete: parsed.metadata.Delete === undefined ? false : parseBoolean(parsed.metadata.Delete, patchFieldNames.delete, context),
     value,
   };
   if (parsed.metadata.Handle !== undefined) patch.handle = parsed.metadata.Handle;
@@ -303,8 +304,8 @@ function parsePartialComponent(ctx: ParseContext, range: NodeRange): ComponentPa
   const preamble = readNodePreamble(ctx, range, componentDescriptor.patchFields, ref);
   const patch: ComponentPatch = {
     ref,
-    delete: preamble.fields.Delete === undefined ? false : parseBoolean(preamble.fields.Delete, "Delete", ref),
-    replaceChildren: preamble.fields.Replace === undefined ? false : parseBoolean(preamble.fields.Replace, "Replace", ref),
+    delete: preamble.fields.Delete === undefined ? false : parseBoolean(preamble.fields.Delete, patchFieldNames.delete, ref),
+    replaceChildren: preamble.fields.Replace === undefined ? false : parseBoolean(preamble.fields.Replace, patchFieldNames.replace, ref),
     title: match[2]!.trim(),
     items,
   };
@@ -328,7 +329,7 @@ function parsePartialActionItem(ctx: ParseContext, range: NodeRange): ActionItem
 
   const patch: ActionItemPatch = {
     ref,
-    delete: preamble.fields.Delete === undefined ? false : parseBoolean(preamble.fields.Delete, "Delete", ref),
+    delete: preamble.fields.Delete === undefined ? false : parseBoolean(preamble.fields.Delete, patchFieldNames.delete, ref),
     title: match[2]!.trim(),
   };
   if (preamble.rest) patch.context = preamble.rest;

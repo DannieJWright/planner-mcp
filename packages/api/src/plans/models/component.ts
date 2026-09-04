@@ -6,7 +6,8 @@
  * section directly.
  */
 import { z } from "zod";
-import type { HeadingItemsSection, NodeDescriptor, NodeRange, ParseContext } from "./descriptor.js";
+import type { HeadingItemsSection, NodeRange, NumberedNodeDescriptor, ParseContext } from "./descriptor.js";
+import { patchFieldNames } from "./descriptor.js";
 import { contentBetween, headingText } from "../shared/ast.js";
 import { invalidNodeHeading } from "../shared/errors.js";
 import { canonicalRefPattern, placeholderRef, refHeadingPattern } from "../shared/refs.js";
@@ -89,17 +90,16 @@ export type Component = z.infer<typeof componentSchema>;
 /** Model keys of the component's item collections, derived from the schema itself. */
 export type ComponentItemKey = Exclude<keyof Component, "ref" | "title" | "description">;
 
-export const componentDescriptor: NodeDescriptor = {
+export const componentDescriptor: NumberedNodeDescriptor = {
   key: "component",
   label: "component",
-  refPattern: canonicalRefPattern(refPrefix),
   refPrefix,
   placeholderRef: placeholderRef(refPrefix),
   headingDepth: 2,
   headingBold: true,
   containerHeading: "Components",
   statuses: null,
-  patchFields: ["Delete", "Replace", "Position", "Handle"],
+  patchFields: [patchFieldNames.delete, patchFieldNames.replace, patchFieldNames.position, patchFieldNames.handle],
   sections: componentItemSections,
 };
 

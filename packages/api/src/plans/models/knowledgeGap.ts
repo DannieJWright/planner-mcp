@@ -7,6 +7,7 @@
  * parent item.
  */
 import { z } from "zod";
+import { patchFieldNames } from "./descriptor.js";
 import type { HeadingItemsSection, ItemModel, ParsedItem, ProseSection } from "./descriptor.js";
 import { itemHeading, textItemSchema } from "./textItem.js";
 
@@ -95,6 +96,6 @@ export const knowledgeGapsSection = {
   headingBold: true,
   trimSectionBody: true,
   subsections: [findingsSection],
-  patchFields: ["Status", "Delete", "Handle"],
+  patchFields: [patchFieldNames.status, patchFieldNames.delete, patchFieldNames.handle],
   model: knowledgeGapModel,
 } satisfies HeadingItemsSection<"knowledgeGaps">;

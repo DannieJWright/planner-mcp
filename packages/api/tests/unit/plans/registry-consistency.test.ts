@@ -23,7 +23,7 @@ import {
   referenceSectionsFor,
   sectionByDbKind,
 } from "../../../src/plans/models/registry.js";
-import { canonicalRefPattern, refHeadingPattern, refHeadingPrefix } from "../../../src/plans/shared/refs.js";
+import { refHeadingPattern, refHeadingPrefix } from "../../../src/plans/shared/refs.js";
 
 /**
  * The descriptor registry is the single source of truth for plan vocabulary. These
@@ -137,11 +137,9 @@ describe("model registry consistency", () => {
     expect(itemLabels).toBe(planItemLabels);
   });
 
-  it("derives node heading matchers from the canonical reference pattern", () => {
+  it("derives node heading matchers and placeholders from the reference prefix", () => {
     for (const node of [componentDescriptor, actionItemDescriptor]) {
       const canonical = `${node.refPrefix}1`;
-      expect(node.refPattern.test(canonical)).toBe(true);
-      expect(node.refPattern.source).toBe(canonicalRefPattern(node.refPrefix).source);
       expect(refHeadingPattern(node.refPrefix, false).test(`${canonical} - Title`)).toBe(true);
       expect(refHeadingPrefix(node.refPrefix, false).test(`${canonical} - Title`)).toBe(true);
       expect(node.placeholderRef).toBe(`${node.refPrefix}New`);
@@ -150,8 +148,8 @@ describe("model registry consistency", () => {
   });
 
   it("rejects reference spellings the canonical pattern does not allow", () => {
-    // COMPONENT / COMPONENTS were accepted by a legacy heading regex that had drifted
-    // from the schema. Deriving every matcher from one prefix removes that divergence.
+    // Every matcher derives from one prefix, so a spelling accepted by the heading
+    // prefilter is always a spelling the schema accepts.
     const pattern = refHeadingPrefix(componentDescriptor.refPrefix, false);
     expect(pattern.test("COMPONENT 1 - Title")).toBe(false);
     expect(pattern.test("COMPONENTS-1 - Title")).toBe(false);

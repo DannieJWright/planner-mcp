@@ -131,8 +131,7 @@ export function parseLeadingMetadata(
       continue;
     }
     const trimmed = line.trim();
-    const match = trimmed.match(/^\*\*([A-Za-z][A-Za-z ]*):\*\*\s*(.*)$/)
-      ?? (isMetadataLine(trimmed) ? trimmed.match(/^([A-Za-z][A-Za-z ]*):\s*(.*)$/) : null);
+    const match = trimmed.match(/^\*\*([A-Za-z][A-Za-z ]*):\*\*\s*(.*)$/);
     if (!match) break;
     const key = match[1]!.trim();
     const allowed = allowedKeys.find((candidate) => candidate.toLowerCase() === key.toLowerCase());

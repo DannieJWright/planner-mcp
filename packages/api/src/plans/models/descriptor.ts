@@ -16,6 +16,17 @@ import type { MarkdownNode } from "../shared/ast.js";
 /** Strict parsing enforces required sections and complete values; partial does not. */
 export type ParseMode = "strict" | "partial";
 
+/** The single declaration of the patch protocol's metadata names. */
+export const patchFieldNames = {
+  status: "Status",
+  delete: "Delete",
+  replace: "Replace",
+  position: "Position",
+  handle: "Handle",
+} as const;
+
+export type PatchFieldName = (typeof patchFieldNames)[keyof typeof patchFieldNames];
+
 /** A half-open `[start, end)` range of top-level mdast node indexes. */
 export type NodeRange = { start: number; end: number };
 
@@ -97,7 +108,7 @@ export type HeadingItemsSection<Key extends string = string> = {
   /** Nested prose subsections belonging to each item, e.g. Findings. */
   subsections: ProseSection[];
   /** Metadata fields accepted on an item in a partial document. */
-  patchFields: readonly string[];
+  patchFields: readonly PatchFieldName[];
   detailsTransform?: DetailsTransform;
   /** Model module owning validation, projection, and persistence for one item. */
   model: ItemModel;
@@ -167,12 +178,8 @@ export type NodeDescriptor = {
   key: string;
   /** Human-readable name used in parse errors, e.g. `component`. */
   label: string;
-  /** Canonical whole-string reference pattern, shared with the Zod schema. */
-  refPattern: RegExp;
   /** Reference prefix every matcher is derived from, e.g. `COMP-`. */
   refPrefix: string;
-  /** `<PREFIX>New`, the placeholder an agent uses to create one. */
-  placeholderRef: string;
   /** Depth of the node's own heading. */
   headingDepth: number;
   /** Whether the node heading is wrapped in Markdown bold markers. */
@@ -181,9 +188,18 @@ export type NodeDescriptor = {
   containerHeading: string | null;
   /** Allowed status values, or `null` when the node carries no status. */
   statuses: readonly string[] | null;
-  /** Metadata fields accepted on this node in a partial document. */
+  /** Fields accepted on this node in a partial document. For item sections these are `PatchFieldName` values. */
   patchFields: readonly string[];
   sections: SectionDescriptor[];
+};
+
+/**
+ * A node whose references are numbered `<PREFIX><n>`, e.g. components and action items.
+ * The plan root is not one of these: its reference is an opaque, server-minted identifier.
+ */
+export type NumberedNodeDescriptor = NodeDescriptor & {
+  /** `<PREFIX>New`, the placeholder an agent uses to create one. */
+  placeholderRef: string;
 };
 
 export function isHeadingItems(section: SectionDescriptor): section is HeadingItemsSection {

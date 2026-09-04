@@ -7,12 +7,13 @@
  * formatter, and the patch engine iterate one list rather than special-casing names.
  */
 import { z } from "zod";
+import { patchFieldNames } from "./descriptor.js";
 import {
   isBulletList,
   isHeadingItems,
   type BulletListSection,
-  type NodeDescriptor,
   type NodeRange,
+  type NumberedNodeDescriptor,
   type ParseContext,
   type SectionDescriptor,
 } from "./descriptor.js";
@@ -51,7 +52,7 @@ export const acceptanceCriteriaSection = textSection({
   aliases: ["acceptance\\s+criteria"],
   referenceRole: "suppress",
   dbKind: null,
-  patchFields: ["Delete", "Handle"],
+  patchFields: [patchFieldNames.delete, patchFieldNames.handle],
   headingBold: false,
   trimSectionBody: false,
 });
@@ -109,17 +110,16 @@ export const actionItemSchema = z.object({
 
 export type ActionItem = z.infer<typeof actionItemSchema>;
 
-export const actionItemDescriptor: NodeDescriptor = {
+export const actionItemDescriptor: NumberedNodeDescriptor = {
   key: "actionItem",
   label: "action item",
-  refPattern: canonicalRefPattern(refPrefix),
   refPrefix,
   placeholderRef: placeholderRef(refPrefix),
   headingDepth: 2,
   headingBold: true,
   containerHeading: "Action Items",
   statuses: actionItemStatuses,
-  patchFields: ["Status", "Delete", "Position", "Handle"],
+  patchFields: [patchFieldNames.status, patchFieldNames.delete, patchFieldNames.position, patchFieldNames.handle],
   sections: actionItemSections,
 };
 

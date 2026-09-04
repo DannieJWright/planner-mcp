@@ -50,9 +50,7 @@ export const planPatchableFields = ["title", "description", "tags", "status"] as
 export const planDescriptor: NodeDescriptor = {
   key: "plan",
   label: "plan",
-  refPattern: /^.+$/,
   refPrefix: planRefPrefix,
-  placeholderRef: newPlanReference,
   headingDepth: 1,
   headingBold: false,
   containerHeading: null,

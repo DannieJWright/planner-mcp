@@ -2,6 +2,7 @@
  * A Decision: a component item carrying a required decision status.
  */
 import { z } from "zod";
+import { patchFieldNames } from "./descriptor.js";
 import type { HeadingItemsSection, ItemModel, ParsedItem } from "./descriptor.js";
 import { itemHeading, textItemSchema } from "./textItem.js";
 
@@ -55,6 +56,6 @@ export const decisionsSection = {
   headingBold: true,
   trimSectionBody: true,
   subsections: [],
-  patchFields: ["Status", "Delete", "Handle"],
+  patchFields: [patchFieldNames.status, patchFieldNames.delete, patchFieldNames.handle],
   model: decisionModel,
 } satisfies HeadingItemsSection<"decisions">;

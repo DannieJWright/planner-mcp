@@ -7,7 +7,8 @@
  * rather than four near-identical files.
  */
 import { z } from "zod";
-import type { HeadingItemsSection, ItemModel, ParsedItem, ReferenceRole } from "./descriptor.js";
+import { patchFieldNames } from "./descriptor.js";
+import type { HeadingItemsSection, ItemModel, PatchFieldName, ParsedItem, ReferenceRole } from "./descriptor.js";
 
 export const textItemSchema = z.object({
   ref: z.string().min(1),
@@ -57,7 +58,7 @@ export type TextSectionOptions<Key extends string> = {
   headingBold?: boolean;
   trimSectionBody?: boolean;
   detailsTransform?: HeadingItemsSection["detailsTransform"];
-  patchFields?: readonly string[];
+  patchFields?: readonly PatchFieldName[];
 };
 
 /** Build a status-free heading-item section descriptor. */
@@ -77,7 +78,7 @@ export function textSection<Key extends string>(options: TextSectionOptions<Key>
     headingBold: options.headingBold ?? true,
     trimSectionBody: options.trimSectionBody ?? true,
     subsections: [],
-    patchFields: options.patchFields ?? ["Status", "Delete", "Handle"],
+    patchFields: options.patchFields ?? [patchFieldNames.status, patchFieldNames.delete, patchFieldNames.handle],
     model: textItemModel,
   };
   if (options.detailsTransform) section.detailsTransform = options.detailsTransform;
