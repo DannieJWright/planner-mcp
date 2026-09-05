@@ -5,8 +5,8 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
-import { formatPlanMarkdown, parsePlanMarkdown } from "../../src/markdown.js";
-import { PlanRepository } from "../../src/repository.js";
+import { formatPlanMarkdown, parsePlanMarkdown } from "../../src/plans/markdown.js";
+import { PlanRepository } from "../../src/plans/repository.js";
 import { createServer } from "../../src/server.js";
 import { samplePlan } from "../fixtures/sample-plan.js";
 

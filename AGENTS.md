@@ -2,11 +2,14 @@
 
 ## Start Here
 
-Read `README.md` and `docs/REPOSITORY_MAP.md` before changing package boundaries. The root is an npm workspace; run commands from the repository root unless debugging one package.
+Read `README.md` and `docs/REPOSITORY_MAP.md` before changing package boundaries. Read `docs/MODELS.md` before changing the plan format, adding a section, or touching parsing, formatting, or persistence. The root is an npm workspace; run commands from the repository root unless debugging one package.
 
 ## Invariants
 
-- `packages/api/src/domain.ts` is the authoritative model definition.
+- `packages/api/src/plans/models/` holds the authoritative model definitions. `plans/domain.ts` is a re-export shim; do not add schemas to it.
+- A section heading, singular item label, reference prefix, status value, persistence kind, or patch metadata name is declared in exactly one descriptor and never re-spelled at a call site, in any package. Cross-package consumers import those values from `@planner/api` instead of re-declaring them.
+- Plan-specific code belongs under `packages/api/src/plans/`. Top-level modules such as `server.ts` stay document-type agnostic and delegate to feature folders.
+- A parent model never reimplements a child model's parsing; it delegates to the child or to the shared section walker.
 - Markdown input must be parsed by a Markdown parser, not regular expressions over the whole document. Narrow heading validation may use regular expressions after AST parsing.
 - Database writes for a plan must remain transactional; an update replaces all child components/items atomically.
 - `reference: New` creates a plan. A persisted reference updates that plan.
@@ -20,8 +23,13 @@ Read `README.md` and `docs/REPOSITORY_MAP.md` before changing package boundaries
 
 - Plan numbering is normalized by the backend during Markdown ingest and sync. Agents must not renumber components or subsections themselves.
 - Agents do not need to reorder plan files before upload. The sync process orders components by their document order and assigns canonical component and subsection references automatically.
-- Reference rewriting is centralized in `packages/api/src/markdown.ts`. If a new component subsection or reference-bearing section is added, update the `referenceTypes` registry with its label, aliases, and model key so its references are renumbered and rewritten consistently.
+- Reference rewriting is centralized in `packages/api/src/plans/models/normalize.ts` and driven by the descriptor registry. A new reference-bearing section declares its own `aliases` and `referenceRole`; nothing else needs editing for its references to be renumbered and rewritten.
 - Add parser, formatter, API, and round-trip tests whenever a new reference-bearing section is introduced. Unknown references should remain unchanged and be reported through `validationFailures.ordering`.
+- Follow the walkthrough in `docs/MODELS.md` when adding a section or a model field.
+
+## Documentation
+
+- Docs describe the current state of the project only. Do not explain legacy behavior, previous implementations, or how behavior changed over time (for example, avoid phrasing like "matching what X has always done"). If a behavior is new or deliberate, document it as current fact without narrating its history.
 
 ## Commands
 
