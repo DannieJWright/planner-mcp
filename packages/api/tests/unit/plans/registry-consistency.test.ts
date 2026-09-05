@@ -1,0 +1,229 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { itemStatuses } from "../../../src/plans/domain.js";
+import { decisionStatuses } from "../../../src/plans/models/decision.js";
+import { knowledgeGapStatuses } from "../../../src/plans/models/knowledgeGap.js";
+import { actionItemSchema, actionItemDescriptor, actionItemSections } from "../../../src/plans/models/actionItem.js";
+import { componentSchema, componentDescriptor } from "../../../src/plans/models/component.js";
+import { isBulletList, isHeadingItems } from "../../../src/plans/models/descriptor.js";
+import { itemLabels as planItemLabels, planSchema } from "../../../src/plans/models/plan.js";
+import { textSection } from "../../../src/plans/models/textItem.js";
+import {
+  allHeadingItemSections,
+  allProseSections,
+  allSections,
+  componentItemSections,
+  componentSectionByHeading,
+  componentSectionByKey,
+  headingItemSections,
+  itemLabels,
+  nodeDescriptors,
+  persistedItemSections,
+  persistedItemSectionsFor,
+  referenceSections,
+  referenceSectionsFor,
+  sectionByDbKind,
+} from "../../../src/plans/models/registry.js";
+import { refHeadingPattern, refHeadingPrefix } from "../../../src/plans/shared/refs.js";
+
+/**
+ * The descriptor registry is the single source of truth for plan vocabulary. These
+ * tests enforce the invariants that make that safe: descriptors agree with the Zod
+ * schemas, names are unique, and every derived matcher stays consistent with the
+ * canonical reference pattern.
+ */
+describe("model registry consistency", () => {
+  it("declares a section for every component item field in the schema", () => {
+    const schemaKeys = Object.keys(componentSchema.shape).filter((key) => !["ref", "title", "description"].includes(key));
+    expect(componentItemSections.map((section) => section.key).sort()).toEqual(schemaKeys.sort());
+  });
+
+  it("declares a section for every action item collection in the schema", () => {
+    const schemaKeys = Object.keys(actionItemSchema.shape).filter((key) => !["ref", "title", "status", "context"].includes(key));
+    expect(actionItemDescriptor.sections.map((section) => section.key).sort()).toEqual(schemaKeys.sort());
+  });
+
+  it("declares a collection for every plan node descriptor", () => {
+    const schemaKeys = Object.keys(planSchema.shape);
+    expect(schemaKeys).toContain("components");
+    expect(schemaKeys).toContain("actionItems");
+  });
+
+  it("keeps section headings unique within each node", () => {
+    for (const node of nodeDescriptors) {
+      const headings = node.sections.map((section) => section.heading);
+      expect(new Set(headings).size).toBe(headings.length);
+    }
+  });
+
+  it("keeps model keys unique across every section", () => {
+    const keys = allSections().map((section) => section.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("keeps singular item labels unique", () => {
+    const labels = allHeadingItemSections().map((section) => section.singularLabel);
+    expect(new Set(labels).size).toBe(labels.length);
+  });
+
+  it("keeps persistence kinds unique and resolvable in both directions", () => {
+    const kinds = persistedItemSections().map((section) => section.dbKind!);
+    expect(new Set(kinds).size).toBe(kinds.length);
+    for (const section of persistedItemSections()) {
+      expect(sectionByDbKind(section.dbKind!)).toBe(section);
+    }
+  });
+
+  it("resolves every component section by heading and by key", () => {
+    for (const section of componentItemSections) {
+      expect(componentSectionByHeading(section.heading)).toBe(section);
+      expect(componentSectionByKey(section.key)).toBe(section);
+    }
+  });
+
+  it("gives every status-bearing section a non-empty status list", () => {
+    for (const section of allHeadingItemSections()) {
+      if (section.statuses === null) continue;
+      expect(section.statuses.length).toBeGreaterThan(0);
+      expect(new Set(section.statuses).size).toBe(section.statuses.length);
+    }
+  });
+
+  it("keeps the public itemStatuses union in sync with the status-bearing descriptors", () => {
+    // The literal keeps a stable order and shape for the public type; this test is what
+    // ties its values to the descriptors so neither side can drift silently.
+    const declared = new Set<string>([...decisionStatuses, ...knowledgeGapStatuses]);
+    expect(new Set(itemStatuses).size).toBe(itemStatuses.length);
+    expect([...new Set(itemStatuses)].sort()).toEqual([...declared].sort());
+  });
+
+  it("keeps the public itemStatuses union in a stable order", () => {
+    // Callers may rely on the tuple's shape and order; a Set-spread derivation would make
+    // the runtime order depend on whichever descriptor happens to declare a status first.
+    expect([...itemStatuses]).toEqual(["Open", "Decided", "Resolved", "Closed"]);
+  });
+
+  it("covers every declared renumber-role section through the node-scoped views", () => {
+    // The generic aggregate is the union of what each node owns, so a section registered
+    // under any node type participates in renumbering instead of being skipped silently.
+    const fromNodes = nodeDescriptors.flatMap((node) => referenceSectionsFor(node));
+    expect(fromNodes).toEqual(referenceSections());
+    for (const section of allHeadingItemSections()) {
+      if (section.referenceRole !== "renumber") continue;
+      expect(referenceSections()).toContain(section);
+    }
+  });
+
+  it("keeps the generic persistence aggregate equal to every node's persisted sections", () => {
+    const fromNodes = nodeDescriptors.flatMap((node) => persistedItemSectionsFor(node));
+    expect(fromNodes).toEqual(persistedItemSections());
+  });
+
+  it("gives every reference-bearing section at least one alias", () => {
+    for (const section of allHeadingItemSections()) {
+      if (section.referenceRole === "none") continue;
+      expect(section.aliases.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("includes every nested prose subsection label in the item label set", () => {
+    for (const subsection of allProseSections()) {
+      expect(itemLabels()).toContain(subsection.rejectNestedLabel);
+    }
+  });
+
+  it("derives the item label set in exactly one implementation", () => {
+    // The registry re-exports the plan model's function; a second, parallel derivation
+    // would let parsing and the consistency checks drift apart silently.
+    expect(itemLabels).toBe(planItemLabels);
+  });
+
+  it("derives node heading matchers and placeholders from the reference prefix", () => {
+    for (const node of [componentDescriptor, actionItemDescriptor]) {
+      const canonical = `${node.refPrefix}1`;
+      expect(refHeadingPattern(node.refPrefix, false).test(`${canonical} - Title`)).toBe(true);
+      expect(refHeadingPrefix(node.refPrefix, false).test(`${canonical} - Title`)).toBe(true);
+      expect(node.placeholderRef).toBe(`${node.refPrefix}New`);
+      expect(refHeadingPattern(node.refPrefix, true).test(`${node.placeholderRef} - Title`)).toBe(true);
+    }
+  });
+
+  it("rejects reference spellings the canonical pattern does not allow", () => {
+    // Every matcher derives from one prefix, so a spelling accepted by the heading
+    // prefilter is always a spelling the schema accepts.
+    const pattern = refHeadingPrefix(componentDescriptor.refPrefix, false);
+    expect(pattern.test("COMPONENT 1 - Title")).toBe(false);
+    expect(pattern.test("COMPONENTS-1 - Title")).toBe(false);
+    expect(pattern.test("comp-1 - Title")).toBe(false);
+    expect(pattern.test("COMP-1 - Title")).toBe(true);
+  });
+
+  it("gives every section a shape-appropriate configuration", () => {
+    for (const section of allSections()) {
+      if (isHeadingItems(section)) {
+        expect(section.itemDepth).toBeGreaterThan(section.sectionDepth);
+        expect(section.singularLabel.length).toBeGreaterThan(0);
+        continue;
+      }
+      if (isBulletList(section)) {
+        expect(section.entryLabel.length).toBeGreaterThan(0);
+        expect(section.entrySyntax.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("nests prose subsections deeper than the items that own them", () => {
+    for (const section of allHeadingItemSections()) {
+      for (const subsection of section.subsections) {
+        expect(subsection.depth).toBeGreaterThan(section.itemDepth);
+      }
+    }
+  });
+});
+
+/**
+ * The reference and persistence aggregates must not be restricted to component sections.
+ * A heading-item section registered under any node type with a renumber role or a
+ * persistence kind is picked up by every consumer of these lookups, instead of being
+ * silently skipped because it does not belong to `componentItemSections`.
+ */
+describe("reference and persistence aggregates across node types", () => {
+  const milestonesSection = textSection({
+    key: "milestones",
+    heading: "Milestones",
+    singularLabel: "Milestone",
+    aliases: ["milestones?", "ms"],
+    dbKind: "milestone",
+  });
+
+  function register(): void {
+    actionItemSections.push(milestonesSection as unknown as typeof actionItemSections[number]);
+  }
+
+  afterEach(() => {
+    const index = actionItemSections.indexOf(milestonesSection as unknown as typeof actionItemSections[number]);
+    if (index !== -1) actionItemSections.splice(index, 1);
+  });
+
+  it("includes a renumber-role section registered under an action item", () => {
+    register();
+    expect(referenceSections()).toContain(milestonesSection);
+    expect(persistedItemSections()).toContain(milestonesSection);
+  });
+
+  it("scopes the per-node views to their owning node only", () => {
+    register();
+    expect(headingItemSections(actionItemDescriptor)).toContain(milestonesSection);
+    expect(referenceSectionsFor(actionItemDescriptor)).toContain(milestonesSection);
+    expect(persistedItemSectionsFor(actionItemDescriptor)).toContain(milestonesSection);
+    expect(headingItemSections(componentDescriptor)).not.toContain(milestonesSection);
+    expect(referenceSectionsFor(componentDescriptor)).not.toContain(milestonesSection);
+    expect(persistedItemSectionsFor(componentDescriptor)).not.toContain(milestonesSection);
+  });
+
+  it("keeps every declared section visible through the per-node views", () => {
+    for (const node of [componentDescriptor, actionItemDescriptor]) {
+      const owned = node.sections.filter(isHeadingItems);
+      expect(headingItemSections(node)).toEqual(owned);
+    }
+  });
+});

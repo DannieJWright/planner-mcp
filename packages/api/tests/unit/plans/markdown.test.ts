@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { formatPlanMarkdown, ingestPlanMarkdown, parsePlanMarkdown } from "../../src/markdown.js";
-import { samplePlan } from "../fixtures/sample-plan.js";
+import { formatPlanMarkdown, ingestPlanMarkdown, parsePlanMarkdown } from "../../../src/plans/markdown.js";
+import { samplePlan } from "../../fixtures/sample-plan.js";
 
 describe("plan Markdown", () => {
   it("round-trips every classified item", () => {
